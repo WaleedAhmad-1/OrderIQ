@@ -79,15 +79,6 @@ Key enums: `Role` · `OrderStatus` · `OrderType` · `PaymentMethod` · `Restaur
 
 ---
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-username/orderiq.git
-cd orderiq
-```
-
----
-
 ### 2. Backend Setup
 
 ```bash
