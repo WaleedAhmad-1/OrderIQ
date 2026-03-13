@@ -97,6 +97,9 @@ exports.createMenuItem = async (req, res) => {
             }
         });
 
+        // Sync RAG embedding (non-blocking)
+        ragSync.syncMenuItemEmbedding(item.id).catch(() => { });
+
         res.status(201).json({ success: true, data: item });
     } catch (error) {
         console.error(error);
@@ -134,6 +137,9 @@ exports.updateMenuItem = async (req, res) => {
             where: { id: req.params.id },
             data: updateData,
         });
+
+        // Sync RAG embedding (non-blocking)
+        ragSync.syncMenuItemEmbedding(updated.id).catch(() => { });
 
         res.status(200).json({ success: true, data: updated });
     } catch (error) {

@@ -85,6 +85,9 @@ exports.createRestaurant = async (req, res) => {
             data: req.body
         });
 
+        // Sync RAG embedding (non-blocking)
+        ragSync.syncRestaurantEmbedding(restaurant.id).catch(() => { });
+
         res.status(201).json({ success: true, data: restaurant });
     } catch (error) {
         console.error(error);
@@ -134,6 +137,10 @@ exports.updateRestaurant = async (req, res) => {
             where: { id: req.params.id },
             data: updateData,
         });
+
+        // Sync RAG embedding (non-blocking)
+        ragSync.syncRestaurantEmbedding(restaurant.id).catch(() => { });
+
         res.status(200).json({ success: true, data: restaurant });
     } catch (error) {
         console.error(error);

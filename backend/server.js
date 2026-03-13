@@ -59,12 +59,18 @@ const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
 const uploadRoutes = require('./routes/upload');
 
+// RAG Module (AI Chat Assistant)
+const rag = require('./rag');
+rag.initialize();
+
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/chat', rag.routes);
+
 
 // Socket.IO Connection
 io.on('connection', (socket) => {

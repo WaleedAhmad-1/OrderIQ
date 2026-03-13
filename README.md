@@ -1,10 +1,10 @@
-# 🍽️ OrderIQ
+# OrderIQ
 
-**OrderIQ** is a full-stack food ordering platform that connects customers, restaurant owners, and administrators in real-time. Built with a modern React frontend and a Node.js/Express backend, it supports live order tracking via Socket.io, Firebase authentication, Cloudinary image uploads, and a PostgreSQL database managed through Prisma.
+**OrderIQ** is a full-stack food ordering platform that connects customers, restaurant owners, and administrators in real-time. Built with a modern React frontend and a Node.js/Express backend, it supports live order tracking via Socket.io, Firebase authentication, Cloudinary image uploads, a PostgreSQL database managed through Prisma, and an **AI-powered RAG Chat Assistant** for intelligent food recommendations.
 
 ---
 
-## 📐 Architecture Overview
+## Architecture Overview
 
 ```
 orderiq/
@@ -14,28 +14,32 @@ orderiq/
 
 ### Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | React 19, Vite, Tailwind CSS, Framer Motion, React Router v7 |
-| **State / Context** | React Context API (Auth, Cart, Restaurant, Admin) |
-| **Real-time** | Socket.io Client |
-| **Auth** | Firebase Authentication |
-| **HTTP Client** | Axios |
-| **UI Extras** | Lucide React, Headless UI, React Hot Toast |
-| **Backend** | Node.js, Express 5 |
-| **Database** | PostgreSQL (hosted on Supabase) via Prisma ORM |
-| **Auth (Server)** | Firebase Admin SDK |
-| **Image Uploads** | Cloudinary + Multer |
-| **Real-time** | Socket.io |
-| **Security** | Helmet, express-rate-limit, CORS |
-| **Logging** | Morgan |
-| **Email** | Nodemailer |
+| Layer               | Technology                                                   |
+| ------------------- | ------------------------------------------------------------ |
+| **Frontend**        | React 19, Vite, Tailwind CSS, Framer Motion, React Router v7 |
+| **State / Context** | React Context API (Auth, Cart, Restaurant, Admin)            |
+| **Real-time**       | Socket.io Client                                             |
+| **Auth**            | Firebase Authentication                                      |
+| **HTTP Client**     | Axios                                                        |
+| **UI Extras**       | Lucide React, Headless UI, React Hot Toast                   |
+| **Backend**         | Node.js, Express 5                                           |
+| **Database**        | PostgreSQL (hosted on Supabase) via Prisma ORM + **pgvector** |
+| **Auth (Server)**   | Firebase Admin SDK                                           |
+| **Image Uploads**   | Cloudinary + Multer                                          |
+| **Real-time**       | Socket.io                                                    |
+| **AI / RAG**        | Ollama (local embeddings + LLM), Groq API (optional)         |
+| **Embeddings**      | `nomic-embed-text` (768-dim vectors via Ollama)              |
+| **LLM**             | Groq `llama-3.3-70b` (primary) / Ollama `gemma3:1b` (fallback) |
+| **Vector Store**    | pgvector (inside existing PostgreSQL)                        |
+| **Security**        | Helmet, express-rate-limit, CORS                             |
+| **Logging**         | Morgan                                                       |
+| **Email**           | Nodemailer                                                   |
 
 ---
 
-## ✨ Features
+## Features
 
-### 👤 Customer
+### Customer
 - Browse restaurants by cuisine, area, and service type
 - Real-time restaurant details and menu browsing
 - Cart management with delivery / pickup / dine-in selection
@@ -43,7 +47,7 @@ orderiq/
 - Saved addresses, favorites, rewards points, and referral codes
 - Firebase-authenticated profile and settings
 
-### 🍳 Restaurant Owner
+### Restaurant Owner
 - Secure restaurant dashboard (protected route)
 - Live orders panel with real-time status updates
 - Full menu management (categories + items, images via Cloudinary)
@@ -51,14 +55,22 @@ orderiq/
 - Team management (invite staff / managers)
 - Order history and analytics
 
-### 🛡️ Admin
+### Admin
 - Admin-only protected dashboard
 - Manage all users, restaurants, orders, and campaigns
 - Platform-wide settings
 
+### AI Chat Assistant (RAG)
+- Floating chat widget available on all pages
+- Intelligent food and restaurant recommendations powered by RAG
+- Semantic search — understands queries like "suggest a good burger place" or "what biryani options are available"
+- Real-time knowledge base — auto-syncs when restaurants or menus are updated
+- Markdown-formatted responses with ratings, locations, prices, and cuisine info
+- Groq API (70B model) for high-quality responses, with local Ollama fallback
+
 ---
 
-## 🗂️ Database Schema (Prisma)
+## Database Schema (Prisma)
 
 Models: `User` · `Restaurant` · `Category` · `MenuItem` · `Order` · `OrderItem` · `Address` · `TeamMember` · `Reward` · `Favorite`
 
@@ -68,14 +80,77 @@ Key enums: `Role` · `OrderStatus` · `OrderType` · `PaymentMethod` · `Restaur
 
 ---
 
-## 🚀 Getting Started
+## RAG Pipeline (AI Chat Assistant)
+
+### How It Works
+
+```
+User asks: "Suggest me a good burger place in Lahore"
+     │
+     ▼
+  1. Embed query → Ollama (nomic-embed-text) converts text to 768-dim vector
+     │
+     ▼
+  2. Vector search → pgvector finds top 8 most similar restaurants/items
+     │
+     ▼
+  3. Build prompt → System rules + retrieved data + conversation history + question
+     │
+     ▼
+  4. LLM generates → Groq API (or Ollama fallback) answers using ONLY retrieved data
+     │
+     ▼
+  5. Response → Formatted markdown sent to frontend chat widget
+```
+
+### Knowledge Base Auto-Sync
+
+When a restaurant or menu item is created/updated, the embedding is automatically regenerated and stored in pgvector. No manual re-indexing needed.
+
+### RAG Module Structure
+
+```
+backend/rag/
+├── config.js                    # LLM, embedding, and prompt configuration
+├── index.js                     # Module entry point
+├── controllers/
+│   └── chatController.js        # /api/chat endpoints
+├── routes/
+│   └── chatRoutes.js            # Express router
+├── services/
+│   ├── embeddingService.js      # Text → vector via Ollama
+│   ├── llmService.js            # Groq (primary) + Ollama (fallback)
+│   ├── vectorStoreService.js    # pgvector table, HNSW index, similarity search
+│   ├── ragPipeline.js           # Full RAG orchestration
+│   └── syncService.js           # Auto-sync embeddings on data changes
+└── scripts/
+    ├── seedData.js              # Seed sample restaurants + menu items
+    └── syncEmbeddings.js        # Generate embeddings for all existing data
+```
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
 - Node.js ≥ 18
-- A [Supabase](https://supabase.com) PostgreSQL project (or any PostgreSQL instance)
+- A [Supabase](https://supabase.com) PostgreSQL project (or any PostgreSQL instance with pgvector)
 - A [Firebase](https://firebase.google.com) project (Auth enabled)
 - A [Cloudinary](https://cloudinary.com) account
+- [Ollama](https://ollama.com/download) installed (for AI Chat Assistant)
+
+---
+
+### 1. Ollama Setup (AI Chat)
+
+```bash
+# Install Ollama from https://ollama.com/download, then:
+ollama pull nomic-embed-text    # Embedding model (~274 MB)
+ollama pull gemma3:1b           # Local LLM fallback (~815 MB)
+```
+
+> **Important:** Ollama must be running before starting the backend. Open the Ollama app (macOS) or run `ollama serve`.
 
 ---
 
@@ -89,7 +164,7 @@ npm install
 Create a `.env` file in `backend/`:
 
 ```env
-PORT=5000
+PORT=5001
 
 # PostgreSQL — Supabase connection pooler URL
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/postgres"
@@ -103,12 +178,23 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 CLOUDINARY_CLOUD_NAME="your-cloud-name"
 CLOUDINARY_API_KEY="your-api-key"
 CLOUDINARY_API_SECRET="your-api-secret"
+
+# RAG / AI Chat Assistant
+GROQ_API_KEY="your-groq-api-key"          # Free at https://console.groq.com
+OLLAMA_BASE_URL="http://localhost:11434"
 ```
 
 Push the database schema:
 
 ```bash
 npx prisma db push
+```
+
+Seed sample restaurant data and generate embeddings (for RAG):
+
+```bash
+node rag/scripts/seedData.js         # Seeds 10 restaurants + 49 menu items
+node rag/scripts/syncEmbeddings.js   # Generates vector embeddings (requires Ollama)
 ```
 
 Start the backend:
@@ -118,7 +204,7 @@ npm run dev      # development (nodemon)
 npm start        # production
 ```
 
-The API will be available at `http://localhost:5000`.
+The API will be available at `http://localhost:5001`.
 
 ---
 
@@ -132,8 +218,8 @@ npm install
 Create a `.env` file in `frontend/`:
 
 ```env
-VITE_API_URL=http://localhost:5000/api
-VITE_SOCKET_URL=http://localhost:5000
+VITE_API_URL=http://localhost:5001/api
+VITE_SOCKET_URL=http://localhost:5001
 
 # Firebase Web SDK
 VITE_FIREBASE_API_KEY=your-api-key
@@ -154,37 +240,56 @@ The app will be available at `http://localhost:5173`.
 
 ---
 
-## 📡 API Endpoints (Overview)
+## API Endpoints (Overview)
 
-| Prefix | Description |
-|---|---|
-| `GET /api/health` | Server health check |
-| `/api/auth` | Registration, login, profile (`/me`) |
-| `/api/restaurants` | List, create, update restaurants and menu |
-| `/api/orders` | Place, track, and manage orders |
-| `/api/users` | User profile, addresses, favorites, rewards |
-| `/api/admin` | Admin-only: users, restaurants, orders, campaigns |
-| `/api/upload` | Image upload to Cloudinary |
+| Prefix             | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `GET /api/health`  | Server health check                               |
+| `/api/auth`        | Registration, login, profile (`/me`)              |
+| `/api/restaurants` | List, create, update restaurants and menu         |
+| `/api/orders`      | Place, track, and manage orders                   |
+| `/api/users`       | User profile, addresses, favorites, rewards       |
+| `/api/admin`       | Admin-only: users, restaurants, orders, campaigns |
+| `/api/upload`      | Image upload to Cloudinary                        |
+| `/api/chat`        | AI Chat Assistant (RAG) — see below               |
+
+### Chat API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/chat` | Send a message, get AI response |
+| `POST` | `/api/chat/stream` | Stream response via Server-Sent Events |
+| `GET`  | `/api/chat/status` | Check RAG system health (embedding count, Ollama status) |
+
+**Request body** (`POST /api/chat`):
+```json
+{
+  "message": "Suggest me a good burger place in Lahore",
+  "conversationHistory": [],
+  "userContext": { "city": "Lahore" }
+}
+```
 
 ---
 
-## 🔌 Real-time Events (Socket.io)
+## Real-time Events (Socket.io)
 
-| Event | Direction | Description |
-|---|---|---|
-| `join_restaurant` | Client → Server | Join a restaurant's notification room |
-| `join_order` | Client → Server | Join an order tracking room |
-| `new_order` | Server → Restaurant | Notify restaurant of a new order |
-| `order_status_update` | Server → Customer | Broadcast order status change |
+| Event                 | Direction           | Description                           |
+| --------------------- | ------------------- | ------------------------------------- |
+| `join_restaurant`     | Client → Server     | Join a restaurant's notification room |
+| `join_order`          | Client → Server     | Join an order tracking room           |
+| `new_order`           | Server → Restaurant | Notify restaurant of a new order      |
+| `order_status_update` | Server → Customer   | Broadcast order status change         |
 
 ---
 
-## 🌳 Project Structure
+## Project Structure
 
 ```
 frontend/src/
 ├── components/         # Reusable UI components
 │   ├── auth/           # Login modal, protected routes
+│   ├── chat/           # ChatAssistant (AI chat widget)
 │   ├── customer/       # DishCard, RestaurantCard
 │   ├── layout/         # Navbar, Footer, CustomerLayout, DashboardSidebar
 │   ├── sections/       # Landing page sections (Hero, CTA, Features, etc.)
@@ -201,7 +306,7 @@ frontend/src/
 │   ├── customer/       # Home, RestaurantDetails, CartPage, OrderTracking, Profile, ...
 │   ├── restaurant/     # Dashboard, LiveOrders, MenuManagement, Analytics, ...
 │   └── admin/          # Dashboard, Users, Restaurants, Orders, Campaigns, Settings
-├── services/           # Axios service modules per domain
+├── services/           # Axios service modules per domain (incl. chat.service.js)
 └── config/             # Firebase web config
 
 backend/
@@ -209,6 +314,13 @@ backend/
 ├── controllers/        # Business logic per domain
 ├── middleware/         # auth.js (Firebase token verify), upload.js (multer)
 ├── prisma/             # schema.prisma
+├── rag/                # RAG AI Chat Assistant module
+│   ├── config.js       # LLM, embedding, prompt settings
+│   ├── index.js        # Module entry point
+│   ├── controllers/    # chatController.js
+│   ├── routes/         # chatRoutes.js
+│   ├── services/       # embeddingService, llmService, vectorStoreService, ragPipeline, syncService
+│   └── scripts/        # seedData.js, syncEmbeddings.js
 ├── routes/             # Express routers
 ├── scripts/            # createAdmin.js (seed admin user)
 ├── uploads/            # Runtime image uploads (gitignored)
@@ -217,7 +329,7 @@ backend/
 
 ---
 
-## 🔐 Creating an Admin User
+## Creating an Admin User
 
 There is no admin registration UI. Use the seed script:
 
@@ -230,7 +342,19 @@ Then log in at `/admin` with the credentials set in the script.
 
 ---
 
-## 📦 Build for Production
+## Startup Order
+
+```
+1. Open Ollama app         ← Must be running first (for AI Chat)
+2. npm run dev (backend)   ← Starts on port 5001
+3. npm run dev (frontend)  ← Starts on port 5173
+```
+
+> **Ollama must be running before the backend.** The RAG pipeline depends on it for embeddings and LLM inference. If Ollama isn't running, chat requests will fail with "Failed to process your message."
+
+---
+
+## Build for Production
 
 ```bash
 # Frontend
@@ -243,6 +367,6 @@ npm run build
 
 ---
 
-## 📝 License
+## License
 
 MIT — feel free to fork and build on this project.
