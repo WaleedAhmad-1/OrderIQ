@@ -36,6 +36,7 @@ import Availability from "./pages/restaurant/Availability";
 import Team from "./pages/restaurant/Team";
 import Settings from "./pages/restaurant/Settings";
 import Analytics from "./pages/restaurant/Analytics";
+import QRCodeManagement from "./pages/restaurant/QRCodeManagement";
 
 //Admin
 import AdminLayout from "./layouts/AdminLayout";
@@ -46,6 +47,7 @@ import AdminUsers from "./pages/admin/Users";
 import AdminOrders from "./pages/admin/Orders";
 import AdminCampaigns from "./pages/admin/Campaigns";
 import AdminSettings from "./pages/admin/Settings";
+import QRMenuPage from "./pages/customer/QRMenuPage";
 
 function App() {
   return (
@@ -103,6 +105,7 @@ function App() {
         <Route path="analytics" element={<Analytics />} />
         <Route path="team" element={<Team />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="qr-codes" element={<QRCodeManagement />} />
       </Route>
 
       {/* Admin Dashboard (protected) */}
@@ -125,6 +128,17 @@ function App() {
         <Route path="orders" element={<AdminOrders />} />
         <Route path="campaigns" element={<AdminCampaigns />} />
         <Route path="settings" element={<AdminSettings />} />
+      </Route>
+
+      {/* Public QR Menu Route (for scanned QR codes) */}
+      <Route
+        element={
+          <CartProvider>
+            <Outlet />
+          </CartProvider>
+        }
+      >
+        <Route path="/menu/:restaurantId" element={<QRMenuPage />} />
       </Route>
     </Routes>
     <ChatAssistant />

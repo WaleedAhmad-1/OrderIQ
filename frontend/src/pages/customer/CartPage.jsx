@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Trash2, CreditCard, ChevronRight, ShoppingBag, MapPin } from 'lucide-react';
+import { ArrowLeft, Trash2, CreditCard, ChevronRight, ShoppingBag, MapPin, UtensilsCrossed } from 'lucide-react';
 import { useCart } from '../../features/customer/CartContext';
 import Button from '../../components/ui/Button';
 import { orderService } from '../../services/order.service';
@@ -9,13 +9,12 @@ import { userService } from '../../services/user.service';
 
 const CartPage = () => {
 
-    const { cartItems, removeFromCart, updateQuantity, cartTotal, restaurant, clearCart } = useCart();
+    const { cartItems, removeFromCart, updateQuantity, cartTotal, restaurant, clearCart, orderType, setOrderType, tableLabel, setTableLabel } = useCart();
 
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentError, setPaymentError] = useState('');
     const [selectedMethod, setSelectedMethod] = useState('gpay');
-    const [orderType, setOrderType] = useState('DELIVERY'); // 'DELIVERY' | 'PICKUP'
 
     // API Data
     const [addresses, setAddresses] = useState([]);
@@ -38,7 +37,7 @@ const CartPage = () => {
         fetchAddresses();
     }, []);
 
-    // Mock Tax & Fees
+    // Tax & Fees
     const deliveryFee = orderType === 'DELIVERY' ? 35 : 0;
     const taxes = Math.round(cartTotal * 0.05); // 5% tax
     const platformFee = 5;
@@ -69,7 +68,8 @@ const CartPage = () => {
 
             const payload = {
                 restaurantId: restaurant.id,
-                type: orderType, // 'DELIVERY' or 'PICKUP'
+                type: orderType,
+                table: orderType === 'DINEIN' ? tableLabel : null,
                 items: formattedItems,
                 subtotal: cartTotal,
                 deliveryFee,
@@ -115,7 +115,6 @@ const CartPage = () => {
     }
 
     return (
-
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-8">
             {/* Header */}
             <div className="bg-white shadow-sm sticky top-0 z-10">
@@ -140,7 +139,7 @@ const CartPage = () => {
                         <div className="flex gap-3">
                             <button
                                 type="button"
-                                onClick={() => setOrderType('DELIVERY')}
+                                onClick={() => { setOrderType('DELIVERY'); setTableLabel(''); }}
                                 className={`flex-1 py-3 rounded-xl font-semibold text-sm border-2 transition-all ${orderType === 'DELIVERY'
                                     ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200'
                                     : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary-300'
@@ -150,13 +149,23 @@ const CartPage = () => {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setOrderType('PICKUP')}
+                                onClick={() => { setOrderType('PICKUP'); setTableLabel(''); }}
                                 className={`flex-1 py-3 rounded-xl font-semibold text-sm border-2 transition-all ${orderType === 'PICKUP'
                                     ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200'
                                     : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary-300'
                                     }`}
                             >
                                 🏃 Pickup
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setOrderType('DINEIN')}
+                                className={`flex-1 py-3 rounded-xl font-semibold text-sm border-2 transition-all ${orderType === 'DINEIN'
+                                    ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200'
+                                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary-300'
+                                    }`}
+                            >
+                                🍽️ Dine-In
                             </button>
                         </div>
                     </div>
@@ -181,6 +190,33 @@ const CartPage = () => {
                                 ) : (
                                     <p className="text-sm text-neutral-500">No address saved. Please add one in profile.</p>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Dine-In Table Info */}
+                    {orderType === 'DINEIN' && (
+                        <div className="bg-white p-5 rounded-xl shadow-sm border border-primary-100 bg-gradient-to-r from-primary-50/50 to-white">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                                    <UtensilsCrossed className="w-6 h-6 text-primary-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="font-bold text-neutral-900">Dine-In Order</h3>
+                                    {tableLabel ? (
+                                        <p className="text-sm text-primary-600 font-medium">Table: {tableLabel}</p>
+                                    ) : (
+                                        <div className="mt-1">
+                                            <input
+                                                type="text"
+                                                value={tableLabel}
+                                                onChange={(e) => setTableLabel(e.target.value)}
+                                                placeholder="Enter table number (e.g., T1)"
+                                                className="text-sm px-3 py-1.5 border border-neutral-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -245,7 +281,7 @@ const CartPage = () => {
                             </div>
                             <div className="flex justify-between">
                                 <span>Delivery Fee</span>
-                                <span>PKR {deliveryFee}</span>
+                                <span>{deliveryFee > 0 ? `PKR ${deliveryFee}` : 'FREE'}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span>Taxes (5%)</span>
@@ -262,7 +298,7 @@ const CartPage = () => {
                         </div>
                     </div>
 
-                    {/* Payment Method Stub */}
+                    {/* Payment Method */}
                     <button
                         type="button"
                         onClick={() => setSelectedMethod('gpay')}
@@ -305,8 +341,6 @@ const CartPage = () => {
             </div>
         </div>
     );
-
 };
 
 export default CartPage;
-

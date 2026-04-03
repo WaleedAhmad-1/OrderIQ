@@ -14,7 +14,8 @@ import {
   Bell,
   Search,
   Store,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  QrCode
 } from 'lucide-react';
 import { RestaurantProvider, useRestaurant } from '../features/restaurant/RestaurantContext';
 import { useAuth } from '../features/auth/AuthContext';
@@ -41,6 +42,7 @@ const RestaurantLayoutInner = () => {
     { id: 'order-history', label: 'Order History', icon: History, path: '/restaurant/order-history' },
     { id: 'availability', label: 'Availability', icon: Clock, path: '/restaurant/availability' },
     { id: 'analytics', label: 'Analytics', icon: BarChart2, path: '/restaurant/analytics' },
+    { id: 'qr-codes', label: 'QR Codes', icon: QrCode, path: '/restaurant/qr-codes' },
     { id: 'team', label: 'Team', icon: Users, path: '/restaurant/team' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/restaurant/settings' },
   ];

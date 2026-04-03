@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ----------------------------------------------------------------------------
@@ -139,6 +140,7 @@ model Restaurant {
   orders         Order[]
   teamMembers    TeamMember[]
   favoritedBy    Favorite[]
+  tables         Table[]
   
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -296,4 +298,19 @@ model Favorite {
   createdAt    DateTime   @default(now())
 
   @@id([userId, restaurantId])
+}
+
+model Table {
+  id             String     @id @default(uuid())
+  restaurantId   String
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  label          String     // e.g., "T1", "Table 5", "Patio-A"
+  capacity       Int        @default(4)
+  isActive       Boolean    @default(true)
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([restaurantId, label])
 }

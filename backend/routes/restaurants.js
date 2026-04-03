@@ -8,9 +8,10 @@ const {
 } = require('../controllers/restaurantController');
 const { protect, authorize } = require('../middleware/auth');
 
-// We also need to map nested menu & team routing 
+// We also need to map nested menu, team & table routing 
 const menuRouter = require('./menu');
 const teamRouter = require('./team');
+const tableRouter = require('./tables');
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ const router = express.Router();
 // e.g. GET /api/restaurants/:restaurantId/menu
 router.use('/:restaurantId/menu', menuRouter);
 router.use('/:restaurantId/team', teamRouter);
+router.use('/:restaurantId/tables', tableRouter);
 
 router
     .route('/')

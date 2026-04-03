@@ -1,0 +1,14 @@
+{
+  "name": "final-year-project",
+  "version": "1.0.0",
+  "description": "Root package.json for running backend and frontend simultaneously",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

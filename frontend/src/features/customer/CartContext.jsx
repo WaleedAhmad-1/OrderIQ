@@ -19,10 +19,21 @@ export const CartProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : null;
     });
 
+    // Dine-in / QR code state
+    const [orderType, setOrderType] = useState(() => {
+        return localStorage.getItem('orderiq_order_type') || 'DELIVERY';
+    });
+
+    const [tableLabel, setTableLabel] = useState(() => {
+        return localStorage.getItem('orderiq_table_label') || '';
+    });
+
     useEffect(() => {
         localStorage.setItem('orderiq_cart', JSON.stringify(cartItems));
         localStorage.setItem('orderiq_cart_restaurant', JSON.stringify(restaurant));
-    }, [cartItems, restaurant]);
+        localStorage.setItem('orderiq_order_type', orderType);
+        localStorage.setItem('orderiq_table_label', tableLabel);
+    }, [cartItems, restaurant, orderType, tableLabel]);
 
     const addToCart = (item, currentRestaurant) => {
         // Check if adding explicitly from a different restaurant
@@ -54,7 +65,7 @@ export const CartProvider = ({ children }) => {
             return prev.map(item => {
                 if (item.id === itemId) {
                     const newQty = item.quantity + delta;
-                    if (newQty <= 0) return null; // Logic to remove if 0 handled by component usually, but fail-safe here
+                    if (newQty <= 0) return null;
                     return { ...item, quantity: newQty };
                 }
                 return item;
@@ -65,10 +76,17 @@ export const CartProvider = ({ children }) => {
     const clearCart = () => {
         setCartItems([]);
         setRestaurant(null);
+        setOrderType('DELIVERY');
+        setTableLabel('');
+    };
+
+    // Set dine-in mode (called from QR scan page)
+    const setDineIn = (table, restaurantId) => {
+        setOrderType('DINEIN');
+        setTableLabel(table);
     };
 
     const cartTotal = cartItems.reduce((acc, item) => {
-        // Assuming price is string "PKR 350" -> parse it
         const price = parseInt(item.price.replace(/[^0-9]/g, '')) || 0;
         return acc + (price * item.quantity);
     }, 0);
@@ -84,9 +102,15 @@ export const CartProvider = ({ children }) => {
             updateQuantity,
             clearCart,
             cartTotal,
-            cartCount
+            cartCount,
+            orderType,
+            setOrderType,
+            tableLabel,
+            setTableLabel,
+            setDineIn
         }}>
             {children}
         </CartContext.Provider>
     );
 };
+
