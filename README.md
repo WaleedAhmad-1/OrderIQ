@@ -42,7 +42,8 @@ orderiq/
 ### Customer
 - Browse restaurants by cuisine, area, and service type
 - Real-time restaurant details and menu browsing
-- Cart management with delivery / pickup / dine-in selection
+- Scan QR codes at restaurant tables to instantly access digital menus
+- Cart management with Delivery, Pickup, and localized Dine-in table mapping
 - Live order tracking with Socket.io
 - Saved addresses, favorites, rewards points, and referral codes
 - Firebase-authenticated profile and settings
@@ -51,6 +52,7 @@ orderiq/
 - Secure restaurant dashboard (protected route)
 - Live orders panel with real-time status updates
 - Full menu management (categories + items, images via Cloudinary)
+- **QR Code Management**: Dynamically generate, manage, and print QR codes mapped to physical tables
 - Availability toggling and working hours
 - Team management (invite staff / managers)
 - Order history and analytics
@@ -59,6 +61,11 @@ orderiq/
 - Admin-only protected dashboard
 - Manage all users, restaurants, orders, and campaigns
 - Platform-wide settings
+
+### QR Code Dine-in System 📸
+- **For Owners**: Create and customize unique QR codes for specific tables from the dashboard.
+- **For Customers**: Scanning the table's QR code routes directly to a specialized dining interface (`/menu/:restaurantId`).
+- **Seamless Ordering**: The order type automatically defaults to `DINEIN` and attaches the specific table number, bypassing the delivery fee logic and notifying the kitchen of the exact table locaton.
 
 ### AI Chat Assistant (RAG)
 - Floating chat widget available on all pages
