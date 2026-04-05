@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const ragSync = require('../rag').sync;
 
 // --- CATEGORIES ---
 

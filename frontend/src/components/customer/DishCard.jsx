@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Minus, Flame, Sparkles, Star } from 'lucide-react';
 import { useCart } from '../../features/customer/CartContext';
 
-const DishCard = ({ dish, restaurantName, restaurantId }) => {
+const DishCard = ({ dish, restaurantName, restaurantId, isClosed }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const { cartItems, addToCart, removeFromCart, updateQuantity } = useCart();
@@ -107,7 +107,12 @@ const DishCard = ({ dish, restaurantName, restaurantId }) => {
           {quantity === 0 ? (
             <button
               onClick={handleAdd}
-              className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium transition-colors"
+              disabled={isClosed}
+              className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
+                isClosed 
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-primary-600 text-white hover:bg-primary-700'
+              }`}
             >
               Add
             </button>
@@ -122,7 +127,8 @@ const DishCard = ({ dish, restaurantName, restaurantId }) => {
               <span className="font-bold text-gray-900">{quantity}</span>
               <button
                 onClick={handleIncrement}
-                className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50"
+                disabled={isClosed}
+                className={`w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg ${isClosed ? 'bg-gray-100 cursor-not-allowed text-gray-400' : 'hover:bg-gray-50'}`}
               >
                 <Plus className="w-4 h-4 text-gray-600" />
               </button>

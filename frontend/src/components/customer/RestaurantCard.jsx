@@ -13,6 +13,10 @@ const RestaurantCard = ({ restaurant, mode = 'delivery' }) => {
     priceRange,
     image,
     promoted,
+    isClosed,
+    delivery,
+    takeaway,
+    dineIn
   } = restaurant;
 
   const modeIcons = {
@@ -31,11 +35,20 @@ const RestaurantCard = ({ restaurant, mode = 'delivery' }) => {
         <img
           src={image}
           alt={name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className={`w-full h-full object-cover transition-transform duration-300 ${isClosed ? 'grayscale opacity-70' : 'group-hover:scale-105'}`}
         />
 
         {/* Overlay Gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+
+        {/* Overlay Closed Badge */}
+        {isClosed && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+            <span className="px-4 py-1.5 border-2 border-red-500 text-red-500 font-black rounded-lg shadow-xl transform -rotate-12 uppercase tracking-wide bg-white/90">
+              Currently Closed
+            </span>
+          </div>
+        )}
 
         {/* Promoted Badge */}
         {promoted && (
@@ -91,12 +104,21 @@ const RestaurantCard = ({ restaurant, mode = 'delivery' }) => {
 
         {/* Mode Info */}
         <div className="flex items-center justify-between text-sm text-gray-600">
-          <div className="flex items-center">
-            <Clock className="w-4 h-4 mr-1" />
-            {mode === 'delivery' ? deliveryTime : pickupTime}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <Clock className="w-4 h-4 mr-1 text-gray-400" />
+              <span className={isClosed ? 'text-red-500 font-medium' : 'text-gray-700'}>
+                {isClosed ? 'Closed' : (mode === 'delivery' ? deliveryTime : pickupTime)}
+              </span>
+            </div>
+            {!isClosed && mode === 'delivery' && (
+              <span className="text-gray-500">{deliveryFee}</span>
+            )}
           </div>
-          <div className="text-gray-500">
-            {mode === 'delivery' ? `${deliveryFee} delivery fee` : 'Ready for pickup'}
+          <div className="flex gap-2 text-gray-400" title="Supported Modes">
+            {delivery && <Truck className="w-4 h-4 hover:text-gray-700" />}
+            {takeaway && <Package className="w-4 h-4 hover:text-gray-700" />}
+            {dineIn && <Utensils className="w-4 h-4 hover:text-gray-700" />}
           </div>
         </div>
       </div>

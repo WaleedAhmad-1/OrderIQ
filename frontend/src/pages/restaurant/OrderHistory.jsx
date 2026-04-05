@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Search, Calendar, Filter, Eye, CheckCircle, Clock, XCircle, RefreshCw } from 'lucide-react';
+import { useRestaurant } from '../../features/restaurant/RestaurantContext';
 import { orderService } from '../../services/order.service';
 
 const OrderHistory = () => {
+  const { restaurant } = useRestaurant();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -12,9 +14,10 @@ const OrderHistory = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchOrders = async () => {
+    if (!restaurant?.id) return;
     try {
       setLoading(true);
-      const data = await orderService.getOrders({ completed: true });
+      const data = await orderService.getOrders({ completed: true, restaurantId: restaurant.id });
       const fetched = (data.data || []).map(o => ({
         id: o.orderNumber || o.id,
         table: o.tableNumber || null,
@@ -38,7 +41,7 @@ const OrderHistory = () => {
     }
   };
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => { fetchOrders(); }, [restaurant]);
 
   const getStatusIcon = (status) => {
     switch (status) {

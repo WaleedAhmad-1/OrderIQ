@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, Lock, Camera, Save, ChevronLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Mail, Phone, Lock, Camera, Save, ChevronLeft, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import DashboardSidebar from '../../components/layout/Customer/DashboardSidebar';
 import Card from '../../components/ui/Card';
@@ -10,6 +10,9 @@ import toast from 'react-hot-toast';
 
 const ProfileSettings = () => {
     const { profile, checkAuth } = useAuth();
+    const fileInputRef = useRef(null);
+    const [avatar, setAvatar] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
@@ -28,8 +31,30 @@ const ProfileSettings = () => {
                 email: profile.email || '',
                 phone: profile.phone || '',
             }));
+            setAvatar(profile.avatar || null);
         }
     }, [profile]);
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const response = await userService.uploadImage(file);
+            setAvatar(response.data.url);
+            toast.success("Photo uploaded successfully");
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast.error(error.response?.data?.message || "Failed to upload photo");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const handleInputChange = (e) => {
         setFormData({
@@ -49,6 +74,7 @@ const ProfileSettings = () => {
             const updatePayload = {
                 fullName: formData.fullName,
                 phone: formData.phone,
+                avatar: avatar,
             };
 
             // If they provided a current password and new password, we include those
@@ -98,18 +124,37 @@ const ProfileSettings = () => {
                             {/* Profile Photo */}
                             <div className="flex items-center gap-6 mb-8 pb-6 border-b border-gray-100">
                                 <div className="relative">
-                                    <div className="w-24 h-24 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-bold text-3xl uppercase">
-                                        {profile?.fullName ? profile.fullName.charAt(0) : (profile?.name ? profile.name.charAt(0) : (profile?.displayName ? profile.displayName.charAt(0) : 'U'))}
+                                    <div className="w-24 h-24 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-bold text-3xl uppercase overflow-hidden">
+                                        {avatar ? (
+                                            <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            profile?.fullName ? profile.fullName.charAt(0) : (profile?.name ? profile.name.charAt(0) : (profile?.displayName ? profile.displayName.charAt(0) : 'U'))
+                                        )}
                                     </div>
-                                    <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white hover:bg-primary-700 transition">
-                                        <Camera className="w-4 h-4" />
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handlePhotoChange}
+                                    />
+                                    <button 
+                                        onClick={handleUploadClick}
+                                        disabled={isUploading}
+                                        className="absolute bottom-0 right-0 w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white hover:bg-primary-700 transition disabled:opacity-50"
+                                    >
+                                        {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                                     </button>
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-neutral-900 mb-1">Profile Photo</h3>
                                     <p className="text-sm text-neutral-500 mb-2">Update your profile picture</p>
-                                    <button className="text-sm text-primary-600 font-medium hover:underline">
-                                        Upload new photo
+                                    <button 
+                                        onClick={handleUploadClick}
+                                        disabled={isUploading}
+                                        className="text-sm text-primary-600 font-medium hover:underline disabled:opacity-50"
+                                    >
+                                        {isUploading ? 'Uploading...' : 'Upload new photo'}
                                     </button>
                                 </div>
                             </div>

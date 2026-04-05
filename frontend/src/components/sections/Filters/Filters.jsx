@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Filter, X, ChevronDown } from 'lucide-react';
 
 const Filters = () => {
@@ -8,6 +8,7 @@ const Filters = () => {
   const [selectedCuisines, setSelectedCuisines] = useState([]);
   const [showCuisineDropdown, setShowCuisineDropdown] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const cuisines = [
     'Indian', 'Italian', 'Chinese', 'Mexican', 'Japanese',
@@ -56,9 +57,9 @@ const Filters = () => {
   const clearAllFilters = () => {
     setSelectedCuisines([]);
     setActiveFilters([]);
-    const url = new URL(window.location.href);
-    url.searchParams.delete('cuisine');
-    window.history.replaceState({}, '', url);
+    const params = new URLSearchParams(location.search);
+    params.delete('cuisine');
+    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
   };
 
   return (
@@ -123,13 +124,13 @@ const Filters = () => {
                         </button>
                         <button
                           onClick={() => {
-                            const url = new URL(window.location.href);
+                            const params = new URLSearchParams(location.search);
                             if (selectedCuisines.length > 0) {
-                              url.searchParams.set('cuisine', selectedCuisines.join(','));
+                              params.set('cuisine', selectedCuisines.join(','));
                             } else {
-                              url.searchParams.delete('cuisine');
+                              params.delete('cuisine');
                             }
-                            window.history.replaceState({}, '', url);
+                            navigate(`${location.pathname}?${params.toString()}`, { replace: true });
                             setShowCuisineDropdown(false);
                           }}
                           className="px-4 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
@@ -192,7 +193,15 @@ const Filters = () => {
 
             {/* Sort Dropdown */}
             <div className="relative">
-              <select className="appearance-none px-4 py-2 bg-white border border-neutral-300 rounded-lg hover:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 pr-10">
+              <select 
+                value={new URLSearchParams(location.search).get('sort') || 'recommended'}
+                onChange={(e) => {
+                  const params = new URLSearchParams(location.search);
+                  params.set('sort', e.target.value);
+                  navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+                }}
+                className="appearance-none px-4 py-2 bg-white border border-neutral-300 rounded-lg hover:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 pr-10 cursor-pointer"
+              >
                 {sortOptions.map((option) => (
                   <option key={option.id} value={option.id}>
                     Sort by: {option.label}
@@ -217,11 +226,19 @@ const Filters = () => {
                   )}
                 </button>
                 
-                <select className="px-4 py-2 bg-white border border-neutral-300 rounded-lg hover:border-neutral-400">
-                  <option>Sort: Recommended</option>
-                  <option>Sort: Rating</option>
-                  <option>Sort: Fastest</option>
-                  <option>Sort: Price</option>
+                <select 
+                  value={new URLSearchParams(location.search).get('sort') || 'recommended'}
+                  onChange={(e) => {
+                    const params = new URLSearchParams(location.search);
+                    params.set('sort', e.target.value);
+                    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+                  }}
+                  className="px-4 py-2 bg-white border border-neutral-300 rounded-lg hover:border-neutral-400"
+                >
+                  <option value="recommended">Sort: Recommended</option>
+                  <option value="rating">Sort: Rating</option>
+                  <option value="fastest">Sort: Fastest</option>
+                  <option value="price">Sort: Price</option>
                 </select>
               </div>
 

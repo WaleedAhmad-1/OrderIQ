@@ -12,6 +12,15 @@ export const userService = {
         return response.data;
     },
 
+    uploadImage: async (file) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await api.post('/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
     // Addresses
     getAddresses: async () => {
         const response = await api.get('/users/addresses');

@@ -10,6 +10,8 @@ import {
   TrendingUp, Flame, Sparkles, ShoppingBag, Award,
   ChevronRight, Package
 } from 'lucide-react';
+import { checkIsClosed } from '../../utils/restaurantUtils';
+
 
 const CustomerHome = () => {
   const { profile, user, isAuthenticated: isLoggedIn } = useAuth();
@@ -35,7 +37,7 @@ const CustomerHome = () => {
         const rData = await restaurantService.getAllRestaurants();
         setRestaurants(rData.data || rData);
 
-        if (isLoggedIn) {
+        if (isLoggedIn && profile) {
           const oData = await orderService.getOrders({ role: 'CUSTOMER' });
           const orders = oData.data?.orders || oData.data || [];
           const active = orders.find(o => ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'].includes(o.status));
@@ -46,11 +48,19 @@ const CustomerHome = () => {
             const progress = (Math.max(currentIdx, 0) / 4) * 100;
             const itemsSummary = active.items?.map(i => i.menuItem?.name || 'Item') || [];
 
+            let estTime = '30-45 min';
+            if (active.estimatedDeliveryTime) {
+               const timeStr = new Date(active.estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+               estTime = `ETA: ${timeStr} (Estimated: ${active.prepTime || 25} mins)`;
+            } else if (active.prepTime) {
+               estTime = `Estimated: ${active.prepTime} mins`;
+            }
+
             setActiveOrder({
               id: active.id || active._id || active.orderId,
               status: active.status,
               restaurant: active.restaurant?.name || 'Restaurant',
-              estimatedTime: '30-45 min',
+              estimatedTime: estTime,
               progress: progress,
               items: itemsSummary
             });
@@ -63,7 +73,7 @@ const CustomerHome = () => {
       }
     };
     fetchData();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, profile]);
 
   // Action Cards Data
   const actionCards = [
@@ -97,7 +107,7 @@ const CustomerHome = () => {
   ];
 
   // Map backend restaurants to our frontend UI rails
-  // Currently we just show one rail with all, but we could filter by rating, etc.
+
   const restaurantRails = [
     {
       id: 'all',
@@ -107,11 +117,16 @@ const CustomerHome = () => {
         ...r,
         // Map backend names to frontend expected names
         cuisines: r.cuisineTypes || [],
-        deliveryTime: '25-35 min', // Mocked until backend supports
-        deliveryFee: r.deliveryFee ? `PKR ${r.deliveryFee}` : 'Free',
+        deliveryTime: `${Math.max(10, (r.prepTime || 25) - 5)}-${(r.prepTime || 25) + 5} min`,
+        deliveryFee: r.deliveryFee > 0 ? `PKR ${r.deliveryFee} delivery fee` : 'Free delivery fee',
         priceRange: r.priceRange || '$$',
-        image: r.coverImage || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400&h=300&fit=crop'
-      }))
+        image: r.coverImage || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400&h=300&fit=crop',
+        isClosed: checkIsClosed(r)
+      })).sort((a, b) => {
+        if (a.isClosed && !b.isClosed) return 1;
+        if (!a.isClosed && b.isClosed) return -1;
+        return 0;
+      })
     }
   ];
 

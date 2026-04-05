@@ -30,11 +30,11 @@ const LiveOrders = () => {
     { id: 'dinein', label: 'Dine-in' },
   ];
 
-  const fetchOrders = async () => {
+    const fetchOrders = async () => {
     if (!restaurant?.id) return;
     try {
       setLoading(true);
-      const res = await orderService.getOrders();
+      const res = await orderService.getOrders({ restaurantId: restaurant.id });
       const rawOrders = res.data || [];
       // filter out completed/cancelled if needed, or keep for history? Let's just keep today's or pending/active ones.
       const activeStats = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'];
@@ -334,7 +334,7 @@ const LiveOrders = () => {
                       </span>
                     </div>
                     <span className="text-sm font-medium text-neutral-700">
-                      ${order.total.toFixed(2)}
+                      PKR {order.total.toFixed(0)}
                     </span>
                   </div>
 
@@ -465,7 +465,7 @@ const LiveOrders = () => {
                         </div>
                       </div>
                       <span className="text-sm font-medium text-neutral-900">
-                        ${item.price ? (item.price * item.quantity).toFixed(2) : '0.00'}
+                        PKR {item.price ? (item.price * item.quantity).toFixed(0) : '0'}
                       </span>
                     </div>
                   ))}

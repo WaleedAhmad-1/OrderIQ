@@ -11,6 +11,7 @@ const Team = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [openActionId, setOpenActionId] = useState(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState('MANAGER');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -31,7 +32,6 @@ const Team = () => {
         name: m.user?.fullName || m.email?.split('@')[0] || 'User',
         email: m.email,
         role: m.role || 'STAFF',
-        status: m.status === 'PENDING' ? 'Invited' : 'Active',
         lastActive: '—', // Could be added to backend later
         avatarColor: getRoleColor(m.role || 'STAFF'),
       })));
@@ -47,14 +47,6 @@ const Team = () => {
     fetchTeam();
   }, [restaurant?.id]);
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'Active': return <UserCheck className="text-success" size={14} />;
-      case 'Invited': return <Clock className="text-warning" size={14} />;
-      case 'Suspended': return <Shield className="text-error" size={14} />;
-      default: return null;
-    }
-  };
 
   const getRoleColor = (role) => {
     const rc = role?.toUpperCase();
@@ -77,17 +69,22 @@ const Team = () => {
 
   const handleInvite = async () => {
     const email = inviteEmail.trim();
-    if (!email || !restaurant?.id) return;
+    const name = inviteName.trim();
+    if (!email || !restaurant?.id) {
+      toast.error('Email is required');
+      return;
+    }
     try {
       setActionLoading(true);
-      await teamService.inviteMember(restaurant.id, email, inviteRole);
-      toast.success('Invitation sent!');
+      await teamService.inviteMember(restaurant.id, email, inviteRole, name);
+      toast.success('Member added successfully!');
       setInviteEmail('');
+      setInviteName('');
       setInviteRole('MANAGER');
       setShowInviteModal(false);
       fetchTeam(); // Refresh the list
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not send invite');
+      toast.error(err.response?.data?.message || 'Could not add member');
     } finally {
       setActionLoading(false);
     }
@@ -107,24 +104,6 @@ const Team = () => {
     }
   };
 
-  const handleToggleStatus = (id) => {
-    setTeamMembers(prev => prev.map(m => {
-      if (m.id !== id) return m;
-      if (m.status === 'Suspended') return { ...m, lastActive: 'Just now', status: 'Active' };
-      return { ...m, lastActive: 'Just now', status: 'Suspended' };
-    }));
-    setOpenActionId(null);
-  };
-
-  const handleRemove = (id) => {
-    setTeamMembers(prev => prev.filter(m => m.id !== id));
-    setOpenActionId(null);
-  };
-
-  const handleResendInvite = (id) => {
-    setTeamMembers(prev => prev.map(m => m.id === id ? { ...m, lastActive: 'Just now' } : m));
-    setOpenActionId(null);
-  };
 
   return (
     <div className="space-y-6">
@@ -132,10 +111,10 @@ const Team = () => {
         <h1 className="text-3xl font-bold text-neutral-800">Team Management</h1>
         <button
           onClick={() => setShowInviteModal(true)}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center gap-2"
+          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center gap-2 transition-all transition-colors active:scale-95"
         >
           <Plus size={16} />
-          Invite Member
+          Add Member
         </button>
       </div>
 
@@ -178,7 +157,6 @@ const Team = () => {
                 <th className="text-left p-4 text-sm font-medium text-neutral-600">Name</th>
                 <th className="text-left p-4 text-sm font-medium text-neutral-600">Email</th>
                 <th className="text-left p-4 text-sm font-medium text-neutral-600">Role</th>
-                <th className="text-left p-4 text-sm font-medium text-neutral-600">Status</th>
                 <th className="text-left p-4 text-sm font-medium text-neutral-600">Last Active</th>
                 <th className="text-left p-4 text-sm font-medium text-neutral-600">Actions</th>
               </tr>
@@ -211,12 +189,6 @@ const Team = () => {
                         {member.role}
                       </span>
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(member.status)}
-                        <span>{member.status}</span>
-                      </div>
-                    </td>
                     <td className="p-4 text-neutral-600">{member.lastActive}</td>
                     <td className="p-4">
                       <div className="relative">
@@ -228,26 +200,12 @@ const Team = () => {
                         </button>
                         {openActionId === member.id && (
                           <div className="absolute right-0 mt-2 w-44 bg-white border border-neutral-200 rounded-lg shadow-lg z-10">
-                            {member.status === 'Invited' && (
-                              <button
-                                onClick={() => handleResendInvite(member.id)}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50"
-                              >
-                                Resend Invite
-                              </button>
-                            )}
                             <button
-                              onClick={() => handleToggleStatus(member.id)}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50"
-                            >
-                              {member.status === 'Suspended' ? 'Activate' : 'Suspend'}
-                            </button>
-                            <button
-                              onClick={() => handleRemove(member.id)}
-                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              Remove
-                            </button>
+                               onClick={() => handleRemoveMember(member.id)}
+                               className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                             >
+                               Remove Member
+                             </button>
                           </div>
                         )}
                       </div>
@@ -265,7 +223,7 @@ const Team = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="p-6 border-b border-neutral-200">
-              <h2 className="text-xl font-semibold text-neutral-800">Invite Team Member</h2>
+              <h2 className="text-xl font-semibold text-neutral-800">Add Team Member</h2>
             </div>
 
             <div className="p-6 space-y-4">
@@ -276,6 +234,17 @@ const Team = () => {
                   placeholder="teammate@restaurant.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter full name"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
               </div>
@@ -325,10 +294,19 @@ const Team = () => {
               <button
                 onClick={handleInvite}
                 disabled={actionLoading}
-                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center gap-2 disabled:opacity-50"
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center gap-2 disabled:opacity-50 transition-all transition-colors active:scale-95 shadow hover:shadow-lg"
               >
-                <Mail size={16} />
-                {actionLoading ? 'Sending...' : 'Send Invite'}
+                {actionLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} />
+                    Save Member
+                  </>
+                )}
               </button>
             </div>
           </div>

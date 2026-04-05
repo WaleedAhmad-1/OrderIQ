@@ -267,10 +267,14 @@ const CustomerLayout = ({ children }) => {
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
                       className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100"
                     >
-                      <div className="w-8 h-8 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center">
-                        <span className="text-white font-medium text-sm">
-                          {userName.charAt(0).toUpperCase()}
-                        </span>
+                      <div className="w-8 h-8 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center overflow-hidden">
+                        {profile?.avatar ? (
+                          <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-white font-medium text-sm">
+                            {userName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <ChevronDown className="w-4 h-4 text-gray-600" />
                     </button>
@@ -475,10 +479,14 @@ const CustomerLayout = ({ children }) => {
                 {isLoggedIn ? (
                   <div className="mb-8">
                     <div className="flex items-center space-x-3 mb-6">
-                      <div className="w-12 h-12 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">
-                          {userName.charAt(0).toUpperCase()}
-                        </span>
+                      <div className="w-12 h-12 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center overflow-hidden">
+                        {profile?.avatar ? (
+                          <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-white font-bold text-lg">
+                            {userName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <p className="font-bold text-gray-900">{userName}</p>

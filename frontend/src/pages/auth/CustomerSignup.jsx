@@ -5,12 +5,15 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'fire
 import { auth } from '../../config/firebase';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../features/auth/AuthContext';
 
 const CustomerSignup = () => {
     const navigate = useNavigate();
+    const { checkAuth } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoginMode, setIsLoginMode] = useState(false);
+    const [errors, setErrors] = useState({});
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
@@ -22,7 +25,36 @@ const CustomerSignup = () => {
     });
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+
+        // Real-time validation
+        if (name === 'email') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            setErrors(prev => ({
+                ...prev,
+                email: value && !emailRegex.test(value) ? 'Invalid email address' : ''
+            }));
+        }
+        if (name === 'phone') {
+            const phoneRegex = /^\+?[\d\s-]{10,15}$/;
+            setErrors(prev => ({
+                ...prev,
+                phone: value && !phoneRegex.test(value) ? 'Invalid phone format (10-15 digits)' : ''
+            }));
+        }
+        if (name === 'password' && formData.confirmPassword) {
+            setErrors(prev => ({
+                ...prev,
+                confirmPassword: formData.confirmPassword !== value ? 'Passwords do not match' : ''
+            }));
+        }
+        if (name === 'confirmPassword') {
+            setErrors(prev => ({
+                ...prev,
+                confirmPassword: value && value !== formData.password ? 'Passwords do not match' : ''
+            }));
+        }
     };
 
     const getPasswordStrength = () => {
@@ -38,6 +70,10 @@ const CustomerSignup = () => {
         setIsLoading(true);
         try {
             await signInWithEmailAndPassword(auth, formData.email, formData.password);
+            
+            // Sync profile state
+            await checkAuth();
+
             toast.success('Logged in successfully!');
             navigate('/customer');
         } catch (error) {
@@ -88,13 +124,15 @@ const CustomerSignup = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
+            // Step 3: Sync profile state
+            await checkAuth();
+
             toast.success('Account created successfully!');
-            // AuthContext will automatically pick up the new user via onAuthStateChanged
             navigate('/customer');
 
         } catch (error) {
-            console.error('Registration error:', error);
-
+            console.error('Registration error details:', error.response?.data || error.message);
+            
             if (error.code === 'auth/email-already-in-use') {
                 toast.error('An account with this email already exists. Try logging in.');
             } else if (error.code === 'auth/weak-password') {
@@ -149,8 +187,9 @@ const CustomerSignup = () => {
                             <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <input required name="email" type="email" value={formData.email} onChange={handleChange} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-gray-50 focus:bg-white" placeholder="you@example.com" />
+                                <input required name="email" type="email" value={formData.email} onChange={handleChange} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.email ? 'border-red-500 focus:ring-red-200' : 'border-gray-200 focus:ring-purple-500 bg-gray-50 focus:bg-white'}`} placeholder="you@example.com" />
                             </div>
+                            {errors.email && <p className="text-red-500 text-xs mt-1 ml-1">{errors.email}</p>}
                         </div>
 
                         {/* Phone — only for signup */}
@@ -159,8 +198,9 @@ const CustomerSignup = () => {
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Phone</label>
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input required name="phone" type="tel" value={formData.phone} onChange={handleChange} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-gray-50 focus:bg-white" placeholder="+1 234 567 8900" />
+                                    <input required name="phone" type="tel" value={formData.phone} onChange={handleChange} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.phone ? 'border-red-500 focus:ring-red-200' : 'border-gray-200 focus:ring-purple-500 bg-gray-50 focus:bg-white'}`} placeholder="+1 234 567 8900" />
                                 </div>
+                                {errors.phone && <p className="text-red-500 text-xs mt-1 ml-1">{errors.phone}</p>}
                             </div>
                         )}
 
@@ -204,8 +244,20 @@ const CustomerSignup = () => {
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Confirm Password</label>
                                 <div className="relative">
                                     <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input required name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-gray-50 focus:bg-white" placeholder="Confirm your password" />
+                                    <input required name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.confirmPassword ? 'border-red-500 focus:ring-red-200' : formData.confirmPassword && !errors.confirmPassword ? 'border-green-500 focus:ring-green-200' : 'border-gray-200 focus:ring-purple-500 bg-gray-50 focus:bg-white'}`} placeholder="Confirm your password" />
+                                    {formData.confirmPassword && !errors.confirmPassword && (
+                                        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-green-500">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    )}
                                 </div>
+                                {errors.confirmPassword ? (
+                                    <p className="text-red-500 text-xs mt-1 ml-1">{errors.confirmPassword}</p>
+                                ) : formData.confirmPassword && !errors.confirmPassword ? (
+                                    <p className="text-green-600 text-xs mt-1 ml-1 font-medium">Passwords match</p>
+                                ) : null}
                             </div>
                         )}
 

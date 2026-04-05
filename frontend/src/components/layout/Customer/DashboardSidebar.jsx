@@ -30,8 +30,12 @@ const DashboardSidebar = () => {
             {/* User Profile Section */}
             <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-bold text-xl">
-                        {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-bold text-xl overflow-hidden">
+                        {profile?.avatar ? (
+                            <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            userName.split(' ').map(n => n[0]).join('').toUpperCase()
+                        )}
                     </div>
                     <div>
                         <h3 className="font-bold text-neutral-900">{userName}</h3>

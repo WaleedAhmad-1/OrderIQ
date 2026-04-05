@@ -25,13 +25,56 @@ exports.protect = async (req, res, next) => {
         // Verify token using Firebase Admin
         const decodedToken = await admin.auth().verifyIdToken(token);
 
+        // Determine role from Firebase custom claims (set by createAdmin script or admin SDK)
+        const claimsRole = decodedToken.role || (decodedToken.admin === true ? 'ADMIN' : null);
+
         // Find the user in our PostgreSQL database using the Firebase UID
-        const user = await prisma.user.findUnique({
+        let user = await prisma.user.findUnique({
             where: { firebaseUid: decodedToken.uid }
         });
 
         if (!user) {
-            return res.status(401).json({ success: false, message: 'Not authorized, user not found in database' });
+            // Lazy sync: user exists in Firebase but not in our DB (likely after a reset)
+            try {
+                const referralCode = `REF-${decodedToken.uid.substring(0, 5).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+                // Use role from Firebase custom claims if available, otherwise default to CUSTOMER
+                const syncRole = claimsRole || 'CUSTOMER';
+                user = await prisma.user.create({
+                    data: {
+                        firebaseUid: decodedToken.uid,
+                        email: decodedToken.email,
+                        fullName: decodedToken.name || decodedToken.email.split('@')[0],
+                        role: syncRole,
+                        referralCode: referralCode
+                    }
+                });
+                console.log(`[Auth] Lazy-syncing new user: ${decodedToken.email}. Role: ${syncRole}. UID: ${decodedToken.uid}`);
+            } catch (createError) {
+                // Handle Race Condition: User created by parallel request (e.g. register endpoint)
+                if (createError.code === 'P2002') {
+                    console.log(`[Auth] Handled race condition: user already created. UID: ${decodedToken.uid}`);
+                    user = await prisma.user.findUnique({
+                        where: { firebaseUid: decodedToken.uid }
+                    });
+                }
+                
+                if (!user) {
+                    console.error('Auto-sync failed:', createError.message);
+                    return res.status(401).json({ 
+                        success: false, 
+                        message: 'Not authorized, user sync failed',
+                        detail: createError.message
+                    });
+                }
+            }
+        }
+        // Self-heal: if Firebase custom claims indicate ADMIN but DB has a lesser role, upgrade
+        if (claimsRole === 'ADMIN' && user.role !== 'ADMIN') {
+            console.log(`[Auth] Role mismatch for ${user.email}: DB=${user.role}, Claims=${claimsRole}. Upgrading to ADMIN.`);
+            user = await prisma.user.update({
+                where: { id: user.id },
+                data: { role: 'ADMIN' }
+            });
         }
 
         // Attach user to request object

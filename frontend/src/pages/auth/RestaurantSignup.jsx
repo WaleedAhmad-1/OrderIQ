@@ -4,11 +4,14 @@ import { User, Mail, Phone, Lock, Store, MapPin, Clock, Check, Loader, ChevronLe
 import toast from 'react-hot-toast';
 import { registerUser } from '../../services/auth.service';
 import { restaurantService } from '../../services/restaurant.service';
+import { useAuth } from '../../features/auth/AuthContext';
 
 const RestaurantSignup = () => {
     const navigate = useNavigate();
+    const { checkAuth } = useAuth();
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [errors, setErrors] = useState({});
     const [formData, setFormData] = useState({
         ownerName: '',
         email: '',
@@ -28,7 +31,30 @@ const RestaurantSignup = () => {
         delivery: true
     });
 
-    const updateField = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+    const updateField = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+
+        if (field === 'email') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            setErrors(prev => ({
+                ...prev,
+                email: value && !emailRegex.test(value) ? 'Invalid email address' : ''
+            }));
+        }
+        if (field === 'phone') {
+            const phoneRegex = /^\+?[\d\s-]{10,15}$/;
+            setErrors(prev => ({
+                ...prev,
+                phone: value && !phoneRegex.test(value) ? 'Invalid phone format (10-15 digits)' : ''
+            }));
+        }
+        if (field === 'confirmPassword') {
+            setErrors(prev => ({
+                ...prev,
+                confirmPassword: value && value !== formData.password ? 'Passwords do not match' : ''
+            }));
+        }
+    };
 
     const nextStep = () => {
         if (step === 1 && formData.password !== formData.confirmPassword) {
@@ -41,6 +67,14 @@ const RestaurantSignup = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Phone validation (numeric, 10-15 digits, optional +)
+        const phoneRegex = /^\+?[\d\s-]{10,15}$/;
+        if (!phoneRegex.test(formData.phone)) {
+            toast.error('Please enter a valid phone number (10-15 digits)');
+            return;
+        }
+
         setIsLoading(true);
         try {
             // 1. Create Firebase user + backend user with RESTAURANT_OWNER role
@@ -69,6 +103,9 @@ const RestaurantSignup = () => {
                 delivery: formData.delivery,
                 status: 'OPEN',
             });
+
+            // 3. Force profile sync to update role in frontend
+            await checkAuth();
 
             toast.success('Restaurant registered successfully! Welcome aboard 🎉');
             navigate('/restaurant/dashboard');
@@ -145,15 +182,17 @@ const RestaurantSignup = () => {
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
                                         <div className="relative">
                                             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                            <input required type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white" placeholder="you@restaurant.com" />
+                                            <input required type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.email ? 'border-red-500 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-500 bg-gray-50 focus:bg-white'}`} placeholder="you@restaurant.com" />
                                         </div>
+                                        {errors.email && <p className="text-red-500 text-xs mt-1 ml-1">{errors.email}</p>}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Phone</label>
                                         <div className="relative">
                                             <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                            <input required type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white" placeholder="+1 234 567 8900" />
+                                            <input required type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.phone ? 'border-red-500 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-500 bg-gray-50 focus:bg-white'}`} placeholder="+1 234 567 8900" />
                                         </div>
+                                        {errors.phone && <p className="text-red-500 text-xs mt-1 ml-1">{errors.phone}</p>}
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -168,8 +207,9 @@ const RestaurantSignup = () => {
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Confirm Password</label>
                                         <div className="relative">
                                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                            <input required type="password" value={formData.confirmPassword} onChange={(e) => updateField('confirmPassword', e.target.value)} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white" placeholder="Confirm password" />
+                                            <input required type="password" value={formData.confirmPassword} onChange={(e) => updateField('confirmPassword', e.target.value)} className={`w-full pl-12 pr-4 py-3.5 border rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all ${errors.confirmPassword ? 'border-red-500 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-500 bg-gray-50 focus:bg-white'}`} placeholder="Confirm password" />
                                         </div>
+                                        {errors.confirmPassword && <p className="text-red-500 text-xs mt-1 ml-1">{errors.confirmPassword}</p>}
                                     </div>
                                 </div>
                             </div>

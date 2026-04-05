@@ -16,7 +16,7 @@ const Analytics = () => {
     const fetchAnalytics = async () => {
       setLoading(true);
       try {
-        const res = await orderService.getOrders();
+        const res = await orderService.getOrders({ restaurantId: restaurant.id });
         const allOrders = res.data || [];
 
         // Filter by range

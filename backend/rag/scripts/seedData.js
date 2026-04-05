@@ -5,6 +5,39 @@
  * Usage: node rag/scripts/seedData.js
  */
 
+const path = require('path');
+const fs = require('fs');
+
+// Try to find .env in backend/ or root/
+const backendEnvPath = path.resolve(__dirname, '../../.env');
+const rootEnvPath = path.resolve(__dirname, '../../../.env');
+
+if (fs.existsSync(backendEnvPath)) {
+    require('dotenv').config({ path: backendEnvPath });
+} else if (fs.existsSync(rootEnvPath)) {
+    require('dotenv').config({ path: rootEnvPath });
+} else {
+    console.warn("⚠️ No .env file found. Proceeding with existing environment variables.");
+}
+
+const admin = require('firebase-admin');
+
+async function initFirebase() {
+    if (admin.apps.length === 0) {
+        if (!process.env.FIREBASE_PROJECT_ID) {
+            throw new Error("❌ Missing FIREBASE_PROJECT_ID in .env!");
+        }
+
+        admin.initializeApp({
+            credential: admin.credential.cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            }),
+        });
+    }
+}
+
 const prisma = require('../../config/db');
 
 const SEED_RESTAURANTS = [
@@ -21,6 +54,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 100,
     priceRange: '$$',
+    prepTime: 25,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -57,6 +91,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 150,
     priceRange: '$$$',
+    prepTime: 40,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -129,6 +164,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 80,
     priceRange: '$$',
+    prepTime: 20,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -171,6 +207,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 250,
     priceRange: '$$$',
+    prepTime: 50,
     dineIn: true,
     takeaway: false,
     delivery: true,
@@ -207,9 +244,10 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 80,
     priceRange: '$',
+    prepTime: 10,
     dineIn: true,
     takeaway: true,
-    delivery: false,
+    delivery: true, // Enabled for visibility
     rating: 4.3,
     reviewCount: 290,
     categories: [
@@ -243,6 +281,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 50,
     priceRange: '$',
+    prepTime: 20,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -279,9 +318,10 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 300,
     priceRange: '$$$',
+    prepTime: 45,
     dineIn: true,
     takeaway: false,
-    delivery: false,
+    delivery: true, // Enabled for visibility
     rating: 4.4,
     reviewCount: 1200,
     categories: [
@@ -314,6 +354,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 100,
     priceRange: '$',
+    prepTime: 15,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -349,6 +390,7 @@ const SEED_RESTAURANTS = [
     status: 'OPEN',
     deliveryFee: 120,
     priceRange: '$$',
+    prepTime: 35,
     dineIn: true,
     takeaway: true,
     delivery: true,
@@ -380,41 +422,79 @@ const SEED_RESTAURANTS = [
 ];
 
 async function seed() {
-  // Get the first user with RESTAURANT_OWNER role, or any user as fallback
-  let owner = await prisma.user.findFirst({ where: { role: 'RESTAURANT_OWNER' } });
-  if (!owner) {
-    owner = await prisma.user.findFirst();
+  try {
+      await initFirebase();
+  } catch (err) {
+      console.error(err.message);
+      process.exit(1);
   }
-  if (!owner) {
-    console.error('No users found in DB. Please create a user first.');
-    process.exit(1);
-  }
-
-  console.log(`Using owner: ${owner.fullName} (${owner.id})`);
 
   let restaurantCount = 0;
   let itemCount = 0;
 
   for (const data of SEED_RESTAURANTS) {
-    // Skip if restaurant already exists by name + city
+    // Delete if restaurant already exists to ensure fresh credentials
     const existing = await prisma.restaurant.findFirst({
       where: { name: data.name, city: data.city },
     });
     if (existing) {
-      console.log(`  Skipping "${data.name}" (already exists)`);
-      continue;
+      await prisma.order.deleteMany({ where: { restaurantId: existing.id } });
+      await prisma.restaurant.delete({ where: { id: existing.id } });
+      console.log(`  Deleted existing "${data.name}" to refresh data`);
     }
 
     const { categories, ...restaurantData } = data;
 
+    // Generate unique credentials for this restaurant
+    const emailPrefix = data.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const ownerEmail = `owner@${emailPrefix}.com`;
+    const ownerPassword = 'Password@123';
+    const ownerFullName = `${data.name} Owner`;
+
+    // Create or get Firebase user
+    let firebaseUser;
+    try {
+        firebaseUser = await admin.auth().getUserByEmail(ownerEmail);
+        console.log(`  ✓ Firebase user already exists for ${ownerEmail}`);
+    } catch {
+        try {
+            firebaseUser = await admin.auth().createUser({
+                email: ownerEmail,
+                password: ownerPassword,
+                displayName: ownerFullName,
+                emailVerified: true,
+            });
+            console.log(`  ✓ Created Firebase user for ${ownerEmail}`);
+        } catch (err) {
+            console.error(`  ❌ Failed to create Firebase user:`, err.message);
+            continue;
+        }
+    }
+
+    // Upsert database user using email as the unique identifier for more reliable seeding
+    const dbOwner = await prisma.user.upsert({
+        where: { email: ownerEmail },
+        update: { 
+            firebaseUid: firebaseUser.uid,
+            role: 'RESTAURANT_OWNER', 
+            fullName: ownerFullName 
+        },
+        create: {
+            firebaseUid: firebaseUser.uid,
+            email: ownerEmail,
+            fullName: ownerFullName,
+            role: 'RESTAURANT_OWNER',
+        },
+    });
+
     const restaurant = await prisma.restaurant.create({
       data: {
         ...restaurantData,
-        ownerId: owner.id,
+        ownerId: dbOwner.id,
       },
     });
     restaurantCount++;
-    console.log(`  Created restaurant: ${restaurant.name}`);
+    console.log(`  Created restaurant: ${restaurant.name} (Owner: ${ownerEmail} | Pass: ${ownerPassword})`);
 
     for (const cat of categories) {
       const category = await prisma.category.create({

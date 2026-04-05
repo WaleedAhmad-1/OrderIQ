@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Star, Clock, MapPin, Check, Truck, Package, Utensils } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { restaurantService } from '../../../services/restaurant.service';
+import { checkIsClosed } from '../../../utils/restaurantUtils';
+import MapView from './MapView';
+
 
 const RestaurantGrid = () => {
   const location = useLocation();
@@ -15,7 +18,8 @@ const RestaurantGrid = () => {
     const search = sp.get('search') || '';
     const cuisine = sp.get('cuisine') || '';
     const type = sp.get('type') || '';
-    return { search, cuisine, type };
+    const sort = sp.get('sort') || 'recommended';
+    return { search, cuisine, type, sort };
   }, [location.search]);
 
   useEffect(() => {
@@ -30,6 +34,7 @@ const RestaurantGrid = () => {
           query.cuisine = params.cuisine.split(',')[0];
         }
         if (params.type) query.type = params.type;
+        if (params.sort) query.sort = params.sort;
         const res = await restaurantService.getAllRestaurants(query);
         const list = res.data || [];
         const mapped = list.map(r => ({
@@ -38,8 +43,8 @@ const RestaurantGrid = () => {
           cuisine: r.cuisineTypes || [],
           rating: r.rating || 0,
           reviewCount: r.reviewCount || 0,
-          deliveryTime: '25-35 min',
-          pickupTime: '15-20 min',
+          deliveryTime: `${r.prepTime || 20}-${(r.prepTime || 20) + 10} min`,
+          pickupTime: `${Math.max(5, (r.prepTime || 20) - 10)}-${r.prepTime || 20} min`,
           deliveryFee: r.deliveryFee ? `PKR ${Math.round(r.deliveryFee)}` : 'PKR 0',
           priceRange: r.priceRange || '$$',
           image: r.coverImage || r.logo || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop',
@@ -48,8 +53,13 @@ const RestaurantGrid = () => {
             r.takeaway ? 'pickup' : null,
             r.dineIn ? 'dinein' : null
           ].filter(Boolean),
-          promoted: r.promoted || false
-        }));
+          promoted: r.promoted || false,
+          isClosed: checkIsClosed(r)
+        })).sort((a, b) => {
+          if (a.isClosed && !b.isClosed) return 1;
+          if (!a.isClosed && b.isClosed) return -1;
+          return 0;
+        });
         setRestaurants(mapped);
       } catch (e) {
         console.error(e);
@@ -78,7 +88,7 @@ const RestaurantGrid = () => {
               Restaurants near you
             </h2>
             <p className="text-neutral-500 mt-2">
-              Delivery • Showing {restaurants.length} results
+              {params.type ? (params.type.charAt(0).toUpperCase() + params.type.slice(1)) : 'All Restaurants'} • Showing {restaurants.length} results
             </p>
           </div>
 
@@ -119,7 +129,7 @@ const RestaurantGrid = () => {
           </div>
         ) : restaurants.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {restaurants.map((restaurant) => (
+            {!showMapView ? restaurants.map((restaurant) => (
               <Link
                 to={`/customer/restaurant/${restaurant.id}`}
                 key={restaurant.id}
@@ -130,11 +140,20 @@ const RestaurantGrid = () => {
                   <img
                     src={restaurant.image}
                     alt={restaurant.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className={`w-full h-full object-cover transition-transform duration-300 ${restaurant.isClosed ? 'grayscale opacity-70' : 'group-hover:scale-105'}`}
                   />
 
                   {/* Overlay Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+
+                  {/* Overlay Closed Badge */}
+                  {restaurant.isClosed && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+                      <span className="px-4 py-1.5 border-2 border-red-500 text-red-500 font-black rounded-lg shadow-xl transform -rotate-12 uppercase tracking-wide bg-white/90">
+                        Currently Closed
+                      </span>
+                    </div>
+                  )}
 
                   {/* Promoted Badge */}
                   {restaurant.promoted && (
@@ -144,8 +163,6 @@ const RestaurantGrid = () => {
                       </span>
                     </div>
                   )}
-
-
 
                   {/* View Menu Button (on hover) */}
                   <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -209,7 +226,9 @@ const RestaurantGrid = () => {
                   <div className="flex items-center justify-between text-sm text-neutral-600">
                     <div className="flex items-center">
                       <Clock className="w-4 h-4 mr-1" />
-                      {restaurant.deliveryTime}
+                      <span className={restaurant.isClosed ? 'text-red-500 font-medium' : ''}>
+                        {restaurant.isClosed ? 'Closed' : restaurant.deliveryTime}
+                      </span>
                     </div>
                     <div className="text-neutral-500">
                       {restaurant.deliveryFee} delivery fee
@@ -217,7 +236,11 @@ const RestaurantGrid = () => {
                   </div>
                 </div>
               </Link>
-            ))}
+            )) : (
+              <div className="col-span-full">
+                <MapView restaurants={restaurants} />
+              </div>
+            )}
           </div>
         ) : (
           // Empty State

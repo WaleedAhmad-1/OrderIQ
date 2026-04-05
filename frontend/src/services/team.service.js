@@ -7,9 +7,9 @@ export const teamService = {
         return response.data;
     },
 
-    // Invite a team member by email & role
-    inviteMember: async (restaurantId, email, role) => {
-        const response = await api.post(`/restaurants/${restaurantId}/team/invite`, { email, role });
+    // Add a team member by email, name & role
+    inviteMember: async (restaurantId, email, role, name) => {
+        const response = await api.post(`/restaurants/${restaurantId}/team/invite`, { email, role, name });
         return response.data;
     },
 

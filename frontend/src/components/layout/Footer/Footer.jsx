@@ -16,7 +16,7 @@ const Footer = () => {
       { label: 'Press', href: '#' },
     ],
     Partner: [
-      { label: 'For Restaurants', href: '#' },
+      { label: 'For Restaurants', href: '/register/restaurant' },
       { label: 'Partner Portal', href: '#' },
       { label: 'Support Center', href: '#' },
       { label: 'API Docs', href: '#' },

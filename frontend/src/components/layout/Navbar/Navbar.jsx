@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Filter, Menu as MenuIcon, ShoppingBag } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import LoginModal from "../../auth/LoginModal";
@@ -14,6 +14,7 @@ const Navbar = () => {
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const searchRef = useRef(null);
 
   // Cart count (mock)
   const cartCount = 3;
@@ -40,14 +41,45 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Close search dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
-    setShowSearchDropdown(e.target.value.length > 0);
+    setShowSearchDropdown(true);
+  };
+
+  const executeSearch = (query) => {
+    const trimmed = (query || '').trim();
+    setSearchQuery(trimmed);
+    setShowSearchDropdown(false);
+    const params = new URLSearchParams(window.location.search);
+    if (trimmed) {
+      params.set('search', trimmed);
+    } else {
+      params.delete('search');
+    }
+    navigate(`/?${params.toString()}`, { replace: true });
+    setTimeout(() => {
+      const el = document.getElementById('restaurants');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const clearSearch = () => {
     setSearchQuery('');
     setShowSearchDropdown(false);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('search');
+    navigate(`/?${params.toString()}`, { replace: true });
   };
 
   useEffect(() => {
@@ -66,9 +98,11 @@ const Navbar = () => {
   useEffect(() => {
     // Sync delivery mode to URL on landing page
     if (location.pathname === '/') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('type', deliveryMode);
-      window.history.replaceState({}, '', url);
+      const params = new URLSearchParams(location.search);
+      if (params.get('type') !== deliveryMode) {
+        params.set('type', deliveryMode);
+        navigate(`/?${params.toString()}`, { replace: true });
+      }
     }
   }, [deliveryMode, location.pathname]);
 
@@ -123,7 +157,7 @@ const Navbar = () => {
               </Link>
 
               {/* Search Bar (Desktop) */}
-              <div className="hidden lg:block relative w-96 group">
+              <div className="hidden lg:block relative w-96 group" ref={searchRef}>
                 <div className="relative transform transition-all duration-300 focus-within:scale-[1.02]">
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-hover:text-purple-500 transition-colors" />
                   <input
@@ -135,15 +169,7 @@ const Navbar = () => {
                     onFocus={() => setShowSearchDropdown(true)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        const url = new URL(window.location.href);
-                        if (searchQuery) {
-                          url.searchParams.set('search', searchQuery);
-                        } else {
-                          url.searchParams.delete('search');
-                        }
-                        window.history.replaceState({}, '', url);
-                        const el = document.getElementById('restaurants');
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        executeSearch(searchQuery);
                       }
                     }}
                   />
@@ -167,7 +193,11 @@ const Navbar = () => {
                         </p>
                         <div className="space-y-1">
                           {recentSearches.map((search, index) => (
-                            <button key={index} className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-purple-50 rounded-xl transition-colors group/item">
+                            <button
+                              key={index}
+                              onClick={() => executeSearch(search)}
+                              className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-purple-50 rounded-xl transition-colors group/item"
+                            >
                               <span className="flex items-center">
                                 <Search className="w-4 h-4 mr-3 text-gray-400 group-hover/item:text-purple-500" />
                                 <span className="font-medium">{search}</span>
@@ -183,7 +213,11 @@ const Navbar = () => {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {popularSuggestions.map((suggestion, index) => (
-                          <button key={index} className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-600 rounded-full transition-all">
+                          <button
+                            key={index}
+                            onClick={() => executeSearch(suggestion)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-600 rounded-full transition-all"
+                          >
                             {suggestion}
                           </button>
                         ))}
@@ -228,7 +262,7 @@ const Navbar = () => {
               {/* Auth Buttons */}
               <div className="hidden md:flex items-center space-x-4">
                 <Link
-                  to="/restaurant"
+                  to="/register/restaurant"
                   className="text-sm font-semibold text-gray-600 hover:text-purple-600 transition-colors"
                 >
                   Partner with Us
@@ -341,7 +375,7 @@ const Navbar = () => {
                 <div className="space-y-4 pt-4 border-t border-gray-100">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Business</p>
                   <Link
-                    to="/restaurant"
+                    to="/register/restaurant"
                     className="flex items-center justify-between px-4 py-3 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors group"
                     onClick={() => setMobileMenuOpen(false)}
                   >

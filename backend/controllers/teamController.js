@@ -65,16 +65,14 @@ exports.inviteTeamMember = async (req, res) => {
             data: {
                 restaurantId,
                 email,
-                name,
+                name: name || email.split('@')[0],
                 role: role || 'STAFF',
                 userId: existingUser ? existingUser.id : null,
-                status: existingUser ? 'ACTIVE' : 'PENDING'
+                status: 'ACTIVE'
             }
         });
 
-        // In a real app, send an email to `email` here
-
-        res.status(201).json({ success: true, data: member, message: 'Invitation sent' });
+        res.status(201).json({ success: true, data: member, message: 'Member added successfully' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server error inviting team member' });

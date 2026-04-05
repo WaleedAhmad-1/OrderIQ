@@ -24,7 +24,7 @@ const RestaurantDashboard = () => {
       try {
         setLoading(true);
         const [ordersRes, teamRes] = await Promise.all([
-          orderService.getOrders(),
+          orderService.getOrders({ restaurantId: restaurant.id }),
           teamService.getTeamMembers(restaurant.id)
         ]);
 
@@ -69,7 +69,7 @@ const RestaurantDashboard = () => {
           id: o.orderNumber || o.id.slice(0, 8),
           table: o.table || (o.type === 'DELIVERY' ? 'Delivery' : 'Pickup'),
           items: o.items?.length || 0,
-          amount: `$${o.total.toFixed(2)}`,
+          amount: `PKR ${o.total.toFixed(0)}`,
           status: o.status
         })));
 
@@ -86,7 +86,7 @@ const RestaurantDashboard = () => {
     { label: 'Today\'s Orders', value: todayStats.orders.toString(), change: null, icon: <TrendingUp size={24} />, color: 'primary' },
     { label: 'Active Staff', value: todayStats.activeStaff, icon: <Users size={24} />, color: 'secondary' },
     { label: 'Avg Prep Time', value: todayStats.avgPrepTime > 0 ? `${todayStats.avgPrepTime} min` : '-', change: null, icon: <Clock size={24} />, color: 'warning' },
-    { label: 'Today\'s Revenue', value: `$${todayStats.revenue.toFixed(2)}`, icon: <DollarSign size={24} />, color: 'success' },
+    { label: 'Today\'s Revenue', value: `PKR ${todayStats.revenue.toFixed(0)}`, icon: <DollarSign size={24} />, color: 'success' },
   ];
 
   return (

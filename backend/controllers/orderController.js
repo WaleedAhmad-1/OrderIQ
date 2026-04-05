@@ -119,8 +119,13 @@ exports.getOrders = async (req, res) => {
 
         res.status(200).json({ success: true, count: orders.length, data: orders });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Server error retrieving orders' });
+        console.error('GET ORDERS ERROR:', {
+            message: error.message,
+            code: error.code,
+            meta: error.meta,
+            stack: error.stack
+        });
+        res.status(500).json({ success: false, message: error.message || 'Server error retrieving orders' });
     }
 };
 

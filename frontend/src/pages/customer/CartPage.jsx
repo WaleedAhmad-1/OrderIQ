@@ -1,20 +1,29 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Trash2, CreditCard, ChevronRight, ShoppingBag, MapPin, UtensilsCrossed } from 'lucide-react';
+import {
+    ArrowLeft, Trash2, ChevronRight, ShoppingBag,
+    MapPin, UtensilsCrossed, Wallet, CheckCircle2
+} from 'lucide-react';
 import { useCart } from '../../features/customer/CartContext';
 import Button from '../../components/ui/Button';
+import GooglePayButton from '../../components/customer/GooglePayButton';
+import { paymentService } from '../../services/payment.service';
 import { orderService } from '../../services/order.service';
 import { userService } from '../../services/user.service';
 
 const CartPage = () => {
 
-    const { cartItems, removeFromCart, updateQuantity, cartTotal, restaurant, clearCart, orderType, setOrderType, tableLabel, setTableLabel } = useCart();
+    const {
+        cartItems, removeFromCart, updateQuantity,
+        cartTotal, restaurant, clearCart,
+        orderType, setOrderType, tableLabel, setTableLabel
+    } = useCart();
 
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentError, setPaymentError] = useState('');
-    const [selectedMethod, setSelectedMethod] = useState('gpay');
+    const [selectedMethod, setSelectedMethod] = useState('gpay'); // 'gpay' | 'cash'
 
     // API Data
     const [addresses, setAddresses] = useState([]);
@@ -39,65 +48,135 @@ const CartPage = () => {
 
     // Tax & Fees
     const deliveryFee = orderType === 'DELIVERY' ? 35 : 0;
-    const taxes = Math.round(cartTotal * 0.05); // 5% tax
+    const taxes = Math.round(cartTotal * 0.05);// 5% tax
     const platformFee = 5;
     const grandTotal = cartTotal + deliveryFee + taxes + platformFee;
 
-    const handleCheckout = async () => {
-        if (!selectedMethod) {
-            setPaymentError('Please select a payment method to continue.');
-            return;
+    // ─── Build shared order payload ────────────────────────────────────────────
+
+    const buildOrderPayload = () => {
+        const formattedItems = cartItems.map(item => ({
+            menuItemId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: parseFloat(item.rawPrice || String(item.price).replace(/[^0-9.]/g, '') || 0)
+        }));
+
+        return {
+            restaurantId: restaurant.id,
+            type: orderType,
+            table: orderType === 'DINEIN' ? tableLabel : null,
+            items: formattedItems,
+            subtotal: cartTotal,
+            deliveryFee,
+            taxes,
+            platformFee,
+            total: grandTotal,
+            deliveryAddress: orderType === 'DELIVERY' && selectedAddress ? {
+                label: selectedAddress.label || 'Saved Address',
+                street: selectedAddress.street,
+                city: selectedAddress.city
+            } : null,
+            customerNotes: instructions,
+        };
+    };
+
+    // ─── Validate before payment ───────────────────────────────────────────────
+
+    const validateOrder = () => {
+        if (!restaurant || !restaurant.id) {
+            setPaymentError('Restaurant context lost. Please clear cart and try again.');
+            toast.error('Restaurant information missing');
+            return false;
         }
-        // Only require address for delivery orders
+
         if (orderType === 'DELIVERY' && !selectedAddress) {
             setPaymentError('Please add a delivery address.');
             toast.error('No delivery address selected');
-            return;
+            return false;
+        }
+
+        if (orderType === 'DINEIN') {
+            const trimmed = tableLabel.trim();
+            if (!trimmed) {
+                setPaymentError('Please enter a table number for Dine-In.');
+                toast.error('Table number is required for Dine-In.');
+                return false;
+            }
+            // Must contain at least one digit — prevents pure alphabets like 'abc'
+            if (!/\d/.test(trimmed)) {
+                setPaymentError('Table number must include at least one digit (e.g., T1, Table 5).');
+                toast.error('Invalid table number — must include a number.');
+                return false;
+            }
         }
 
         setPaymentError('');
+        return true;
+    };
+
+    // ─── Google Pay success callback ───────────────────────────────────────────
+
+    const handleGooglePaySuccess = async (paymentData) => {
+        if (!validateOrder()) return;
+
         setIsProcessing(true);
-
         try {
-            const formattedItems = cartItems.map(item => ({
-                menuItemId: item.id,
-                name: item.name,
-                quantity: item.quantity,
-                price: parseFloat(item.rawPrice || String(item.price).replace(/[^0-9.]/g, '') || 0)
-            }));
+            const token = paymentData?.paymentMethodData?.tokenizationData?.token || 'TEST_TOKEN';
+            const orderPayload = buildOrderPayload();
 
+            const response = await paymentService.processGooglePay({
+                paymentToken: token,
+                orderPayload
+            });
+
+            toast.success('🎉 Payment Successful! Order placed.');
+            clearCart();
+            const newOrderId = response.data?.id;
+            navigate(`/customer/orders/${newOrderId}`);
+        } catch (error) {
+            console.error('Google Pay checkout failed:', error);
+            toast.error(error.response?.data?.message || 'Payment failed. Please try again.');
+            setPaymentError('Payment failed. Please try again.');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // ─── Google Pay error callback ─────────────────────────────────────────────
+
+    const handleGooglePayError = (err) => {
+        console.error('Google Pay error:', err);
+        setPaymentError('Google Pay encountered an error. Try another payment method.');
+        toast.error('Google Pay error. Please try again.');
+    };
+
+    // ─── Cash on Delivery checkout ─────────────────────────────────────────────
+
+    const handleCashCheckout = async () => {
+        if (!validateOrder()) return;
+
+        setIsProcessing(true);
+        try {
             const payload = {
-                restaurantId: restaurant.id,
-                type: orderType,
-                table: orderType === 'DINEIN' ? tableLabel : null,
-                items: formattedItems,
-                subtotal: cartTotal,
-                deliveryFee,
-                taxes,
-                platformFee,
-                total: grandTotal,
-                deliveryAddress: orderType === 'DELIVERY' && selectedAddress ? {
-                    label: selectedAddress.label || 'Saved Address',
-                    street: selectedAddress.street,
-                    city: selectedAddress.city
-                } : null,
-                customerNotes: instructions,
-                paymentMethod: selectedMethod === 'gpay' ? 'GOOGLE_PAY' : 'CASH'
+                ...buildOrderPayload(),
+                paymentMethod: 'CASH'
             };
-
             const response = await orderService.createOrder(payload);
             toast.success('Order Placed Successfully!');
             clearCart();
             const newOrderId = response.data?.id;
             navigate(`/customer/orders/${newOrderId}`);
         } catch (error) {
-            console.error('Checkout failed', error);
+            console.error('Cash checkout failed:', error);
             toast.error(error.response?.data?.message || 'Failed to place order.');
             setPaymentError('Checkout failed. Please try again.');
         } finally {
             setIsProcessing(false);
         }
     };
+
+    // ─── Empty cart state ──────────────────────────────────────────────────────
 
     if (cartItems.length === 0) {
         return (
@@ -116,7 +195,8 @@ const CartPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24 md:pb-8">
-            {/* Header */}
+
+            {/* ── Header ── */}
             <div className="bg-white shadow-sm sticky top-0 z-10">
                 <div className="max-w-content mx-auto px-4 py-4 flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full">
@@ -130,7 +210,8 @@ const CartPage = () => {
             </div>
 
             <div className="max-w-content mx-auto px-4 py-6 grid md:grid-cols-3 gap-6">
-                {/* Left Col: Items & Delivery */}
+
+                {/* ── Left Col ─ Order Details ── */}
                 <div className="md:col-span-2 space-y-6">
 
                     {/* Order Type Toggle */}
@@ -203,18 +284,32 @@ const CartPage = () => {
                                 </div>
                                 <div className="flex-1">
                                     <h3 className="font-bold text-neutral-900">Dine-In Order</h3>
-                                    {tableLabel ? (
-                                        <p className="text-sm text-primary-600 font-medium">Table: {tableLabel}</p>
-                                    ) : (
-                                        <div className="mt-1">
-                                            <input
-                                                type="text"
-                                                value={tableLabel}
-                                                onChange={(e) => setTableLabel(e.target.value)}
-                                                placeholder="Enter table number (e.g., T1)"
-                                                className="text-sm px-3 py-1.5 border border-neutral-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                                            />
-                                        </div>
+                                    <p className="text-xs text-neutral-400 mb-2">e.g. T1, T2, Table 5</p>
+                                    <input
+                                        type="text"
+                                        value={tableLabel}
+                                        onChange={(e) => {
+                                            // Only allow alphanumeric chars + spaces + hyphens
+                                            const cleaned = e.target.value.replace(/[^a-zA-Z0-9\s\-]/g, '');
+                                            setTableLabel(cleaned);
+                                        }}
+                                        placeholder="Enter table number (e.g., T1)"
+                                        maxLength={20}
+                                        className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                                            tableLabel.trim() && !/\d/.test(tableLabel)
+                                                ? 'border-red-400 focus:ring-red-300 bg-red-50'
+                                                : tableLabel.trim() && /\d/.test(tableLabel)
+                                                ? 'border-green-400 focus:ring-green-300 bg-green-50'
+                                                : 'border-neutral-300 focus:ring-primary-300'
+                                        }`}
+                                    />
+                                    {tableLabel.trim() && !/\d/.test(tableLabel) && (
+                                        <p className="text-xs text-red-500 mt-1">
+                                            ⚠ Must include at least one number (e.g., T1, Table 5)
+                                        </p>
+                                    )}
+                                    {tableLabel.trim() && /\d/.test(tableLabel) && (
+                                        <p className="text-xs text-green-600 mt-1">✓ Valid table number</p>
                                     )}
                                 </div>
                             </div>
@@ -257,7 +352,7 @@ const CartPage = () => {
                         </div>
                     </div>
 
-                    {/* Instruction */}
+                    {/* Cooking Instructions */}
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-neutral-100">
                         <h3 className="font-bold text-neutral-900 mb-2">Cooking Instructions</h3>
                         <textarea
@@ -266,12 +361,14 @@ const CartPage = () => {
                             placeholder="e.g. Less spicy, no cutlery needed..."
                             className="w-full border border-neutral-200 rounded-lg p-3 text-sm focus:ring-primary-500 focus:border-primary-500"
                             rows="2"
-                        ></textarea>
+                        />
                     </div>
                 </div>
 
-                {/* Right Col: Bill & Pay */}
+                {/* ── Right Col ─ Bill & Payment ── */}
                 <div className="space-y-6">
+
+                    {/* Bill Details */}
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-neutral-100">
                         <h3 className="font-bold text-neutral-900 mb-4">Bill Details</h3>
                         <div className="space-y-2 text-sm text-neutral-600 border-b border-neutral-100 pb-4">
@@ -298,45 +395,90 @@ const CartPage = () => {
                         </div>
                     </div>
 
-                    {/* Payment Method */}
-                    <button
-                        type="button"
-                        onClick={() => setSelectedMethod('gpay')}
-                        className={`w-full bg-white p-5 rounded-xl shadow-sm border transition flex items-center justify-between ${selectedMethod === 'gpay'
-                            ? 'border-primary-300 ring-2 ring-primary-100'
-                            : 'border-neutral-100 hover:border-primary-200'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-6 bg-gray-100 rounded border border-gray-300 flex items-center justify-center text-xs font-bold">
-                                GPay
-                            </div>
-                            <div className="text-left">
-                                <p className="font-medium text-sm text-neutral-900">Google Pay</p>
-                                <p className="text-xs text-neutral-500">epaisa@gpay.com</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {selectedMethod === 'gpay' && (
-                                <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
-                                    Selected
-                                </span>
-                            )}
-                            <ChevronRight className="w-5 h-5 text-neutral-400" />
-                        </div>
-                    </button>
+                    {/* Payment Method Selection */}
+                    <div className="bg-white p-5 rounded-xl shadow-sm border border-neutral-100">
+                        <h3 className="font-bold text-neutral-900 mb-3">Payment Method</h3>
+                        <div className="space-y-3">
 
+                            {/* Google Pay Option */}
+                            <button
+                                type="button"
+                                onClick={() => setSelectedMethod('gpay')}
+                                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'gpay'
+                                    ? 'border-primary-500 bg-primary-50'
+                                    : 'border-neutral-200 hover:border-primary-300 bg-white'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    {/* G Pay icon */}
+                                    <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+                                            <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#fff" />
+                                        </svg>
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-semibold text-sm text-neutral-900">Google Pay</p>
+                                        <p className="text-xs text-neutral-500">Fast & Secure digital payment</p>
+                                    </div>
+                                </div>
+                                {selectedMethod === 'gpay'
+                                    ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
+                                    : <ChevronRight className="w-5 h-5 text-neutral-400" />
+                                }
+                            </button>
+
+                            {/* Cash on Delivery Option */}
+                            <button
+                                type="button"
+                                onClick={() => setSelectedMethod('cash')}
+                                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'cash'
+                                    ? 'border-primary-500 bg-primary-50'
+                                    : 'border-neutral-200 hover:border-primary-300 bg-white'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <Wallet className="w-5 h-5 text-green-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-semibold text-sm text-neutral-900">Cash on Delivery</p>
+                                        <p className="text-xs text-neutral-500">Pay when you receive your order</p>
+                                    </div>
+                                </div>
+                                {selectedMethod === 'cash'
+                                    ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
+                                    : <ChevronRight className="w-5 h-5 text-neutral-400" />
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Error Message */}
                     {paymentError && (
-                        <p className="text-xs text-error mt-2">{paymentError}</p>
+                        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                            {paymentError}
+                        </div>
                     )}
 
-                    <Button
-                        onClick={handleCheckout}
-                        className="w-full py-4 text-lg shadow-xl shadow-primary-500/20"
-                        isLoading={isProcessing}
-                    >
-                        Pay PKR {grandTotal}
-                    </Button>
+                    {/* ── Payment Action ── */}
+                    {selectedMethod === 'gpay' ? (
+                        <GooglePayButton
+                            amount={grandTotal}
+                            currency="PKR"
+                            label={`Order from ${restaurant?.name || 'Restaurant'}`}
+                            onSuccess={handleGooglePaySuccess}
+                            onError={handleGooglePayError}
+                            disabled={isProcessing}
+                        />
+                    ) : (
+                        <Button
+                            onClick={handleCashCheckout}
+                            className="w-full py-4 text-lg shadow-xl shadow-primary-500/20"
+                            isLoading={isProcessing}
+                        >
+                            Place Order • PKR {grandTotal}
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>

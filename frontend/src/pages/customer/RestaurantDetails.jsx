@@ -6,6 +6,8 @@ import DishCard from '../../components/customer/DishCard';
 import { restaurantService } from '../../services/restaurant.service';
 import { menuService } from '../../services/menu.service';
 import { useCart } from '../../features/customer/CartContext';
+import { checkIsClosed } from '../../utils/restaurantUtils';
+
 
 const RestaurantDetails = () => {
     const { id } = useParams();
@@ -30,6 +32,8 @@ const RestaurantDetails = () => {
                 if (!rData.imageUrl) {
                     rData.imageUrl = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=400&fit=crop';
                 }
+
+                rData.isClosed = checkIsClosed(rData);
                 setRestaurant(rData);
 
                 const cData = menuRes.data || [];
@@ -95,6 +99,11 @@ const RestaurantDetails = () => {
             <div className="max-w-content mx-auto px-4 py-8">
                 {/* Info Strip */}
                 <div className="flex flex-wrap items-center gap-6 text-sm md:text-base border-b border-neutral-100 pb-6 mb-8">
+                    {restaurant.isClosed && (
+                        <div className="px-3 py-1 bg-red-100 text-red-600 font-bold rounded-full uppercase tracking-wide">
+                            Currently Closed
+                        </div>
+                    )}
                     <div className="flex items-center gap-2">
                         <Star className="w-5 h-5 text-green-600 fill-current" />
                         <span className="font-bold text-neutral-900">{restaurant.averageRating || 4.5}</span>
@@ -102,7 +111,11 @@ const RestaurantDetails = () => {
                     </div>
                     <div className="flex items-center gap-2 text-neutral-600">
                         <Clock className="w-5 h-5" />
-                        <span>{restaurant.deliveryTime} delivery</span>
+                        <span>{restaurant.openingTime || '09:00'} - {restaurant.closingTime || '22:00'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-neutral-600">
+                        <Clock className="w-5 h-5" />
+                        <span>{restaurant.deliveryTime || '30 min'} delivery</span>
                     </div>
                     <div className="flex items-center gap-2 text-neutral-600">
                         <Info className="w-5 h-5" />
@@ -147,6 +160,7 @@ const RestaurantDetails = () => {
                                                 dish={{ ...dish, inCart: 0 }}
                                                 restaurantId={restaurant.id}
                                                 restaurantName={restaurant.name}
+                                                isClosed={restaurant.isClosed}
                                             />
                                         ))}
                                     </div>
@@ -195,12 +209,18 @@ const RestaurantDetails = () => {
                                             <span>PKR {cartTotal.toFixed(2)}</span>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => navigate('/customer/checkout')}
-                                        className="w-full mt-6 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition"
-                                    >
-                                        Checkout
-                                    </button>
+                                    {restaurant.isClosed ? (
+                                        <div className="w-full mt-6 py-3 bg-red-100 text-red-600 border border-red-200 text-center rounded-xl font-bold">
+                                            Store Closed
+                                        </div>
+                                    ) : (
+                                      <button
+                                          onClick={() => navigate('/customer/checkout')}
+                                          className="w-full mt-6 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition"
+                                      >
+                                          Checkout
+                                      </button>
+                                    )}
                                 </>
                             )}
                         </div>

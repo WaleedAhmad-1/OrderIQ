@@ -1,13 +1,16 @@
 const prisma = require('../config/db');
+const ragSync = require('../rag').sync;
 
 // @desc    Get all active restaurants with optional filters
 // @route   GET /api/restaurants
 // @access  Public
 exports.getRestaurants = async (req, res) => {
     try {
-        const { search, cuisine, type } = req.query;
+        const { search, cuisine, type, sort } = req.query;
 
-        const whereClause = { status: 'OPEN' }; // Only fetch open restaurants for customers
+        const whereClause = {}; // Fetch all restaurants to show correct closed status
+
+        console.log('[DEBUG] Query Params:', req.query);
 
         if (search) {
             whereClause.name = { contains: search, mode: 'insensitive' };
@@ -23,8 +26,22 @@ exports.getRestaurants = async (req, res) => {
             if (type === 'dinein') whereClause.dineIn = true;
         }
 
+        console.log('[DEBUG] Where Clause:', whereClause);
+
+        let orderBy = {};
+        if (sort === 'rating') {
+            orderBy = { rating: 'desc' };
+        } else if (sort === 'fastest') {
+            orderBy = { prepTime: 'asc' };
+        } else if (sort === 'price') {
+            orderBy = { deliveryFee: 'asc' }; // Or some price property
+        } else {
+            orderBy = { createdAt: 'desc' }; // fallback
+        }
+
         const restaurants = await prisma.restaurant.findMany({
             where: whereClause,
+            orderBy: orderBy,
             include: {
                 categories: { select: { id: true } }
             }
@@ -109,7 +126,7 @@ exports.updateRestaurant = async (req, res) => {
         const {
             name, businessType, description, address, city, area,
             logo, coverImage, openingTime, closingTime, status,
-            delivery, dineIn, takeaway, deliveryFee, priceRange, cuisineTypes,
+            delivery, dineIn, takeaway, deliveryFee, priceRange, cuisineTypes, prepTime,
         } = req.body;
         const updateData = {};
         if (name !== undefined) updateData.name = name;
@@ -128,6 +145,7 @@ exports.updateRestaurant = async (req, res) => {
         if (takeaway !== undefined) updateData.takeaway = takeaway;
         if (deliveryFee !== undefined) updateData.deliveryFee = parseFloat(deliveryFee);
         if (priceRange !== undefined) updateData.priceRange = priceRange;
+        if (prepTime !== undefined) updateData.prepTime = parseInt(prepTime);
         if (cuisineTypes !== undefined) {
             updateData.cuisineTypes = typeof cuisineTypes === 'string'
                 ? cuisineTypes.split(',').map(c => c.trim())

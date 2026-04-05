@@ -7,7 +7,7 @@ const Hero = () => {
   const [featuredCards, setFeaturedCards] = useState([
     { id: 1, name: 'Spice Symphony', rating: 4.8, cuisine: 'Indian • North Indian', prepTime: '25-30 min', image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop' },
     { id: 2, name: 'Tokyo Sushi Bar', rating: 4.7, cuisine: 'Japanese • Sushi', prepTime: '30-40 min', image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&h=300&fit=crop' },
-    { id: 3, name: 'La Pasta Fresca', rating: 4.5, cuisine: 'Italian • Pasta', prepTime: '20-25 min', image: 'https://images.unsplash.com/photo-1551183053-bf91b1d5ae5a?w=400&h=300&fit=crop' },
+    { id: 3, name: 'La Pasta Fresca', rating: 4.5, cuisine: 'Italian • Pasta', prepTime: '20-25 min', image: 'https://images.unsplash.com/photo-1473093226795-af9932fe5856?w=400&h=300&fit=crop' },
   ]);
 
   const navigate = useNavigate();

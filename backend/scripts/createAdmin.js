@@ -83,8 +83,17 @@ async function createAdmin() {
         }
     }
 
+    // 1b. Set Firebase custom claims so the protect middleware can detect admin role
+    try {
+        await admin.auth().setCustomUserClaims(firebaseUser.uid, { role: 'ADMIN', admin: true });
+        console.log('✓ Firebase custom claims set (role: ADMIN)');
+    } catch (claimsErr) {
+        console.error('⚠️ Failed to set custom claims:', claimsErr.message);
+    }
+
     // 2. Upsert database user with ADMIN role
     try {
+        const referralCode = `ADMIN${Math.floor(100 + Math.random() * 900)}`;
         await prisma.user.upsert({
             where: { firebaseUid: firebaseUser.uid },
             update: { role: 'ADMIN', fullName: ADMIN_FULL_NAME },
@@ -93,6 +102,7 @@ async function createAdmin() {
                 email: ADMIN_EMAIL,
                 fullName: ADMIN_FULL_NAME,
                 role: 'ADMIN',
+                referralCode: referralCode,
             },
         });
         console.log('✓ Database user created/updated with ADMIN role');
