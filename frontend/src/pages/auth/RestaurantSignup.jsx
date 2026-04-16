@@ -56,6 +56,22 @@ const RestaurantSignup = () => {
         }
     };
 
+    const getPasswordStrength = () => {
+        const password = formData.password;
+        if (!password) return { strength: 0, label: '', color: '' };
+        
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+        
+        if (hasLetter && hasNumber && hasSpecial) {
+            if (password.length >= 8) return { strength: 100, label: 'Strong', color: 'bg-green-500' };
+            return { strength: 66, label: 'Good', color: 'bg-yellow-500' };
+        }
+        
+        return { strength: 33, label: 'Weak', color: 'bg-red-500' };
+    };
+
     const nextStep = () => {
         if (step === 1 && formData.password !== formData.confirmPassword) {
             toast.error('Passwords do not match');
@@ -202,6 +218,17 @@ const RestaurantSignup = () => {
                                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                             <input required type="password" value={formData.password} onChange={(e) => updateField('password', e.target.value)} className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white" placeholder="Create password" />
                                         </div>
+                                        {formData.password && (
+                                            <div className="mt-2">
+                                                <div className="flex items-center justify-between text-xs mb-1">
+                                                    <span className="text-gray-500">Password strength</span>
+                                                    <span className={`font-bold ${getPasswordStrength().strength === 100 ? 'text-green-600' : getPasswordStrength().strength === 66 ? 'text-yellow-600' : 'text-red-600'}`}>{getPasswordStrength().label}</span>
+                                                </div>
+                                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div className={`h-full ${getPasswordStrength().color} transition-all duration-300`} style={{ width: `${getPasswordStrength().strength}%` }}></div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Confirm Password</label>
@@ -291,7 +318,7 @@ const RestaurantSignup = () => {
                             <button type="submit" disabled={isLoading} className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2">
                                 {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : (
                                     <>
-                                        {step === 3 ? 'Finish Setup' : 'Next Step'}
+                                        {step === 3 ? 'Finish' : 'Next Step'}
                                         {step !== 3 && <ArrowRight className="w-5 h-5" />}
                                     </>
                                 )}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Star, Clock, MapPin, Check, Truck, Package, Utensils } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { restaurantService } from '../../../services/restaurant.service';
@@ -11,7 +11,11 @@ const RestaurantGrid = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [showMapView, setShowMapView] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [error, setError] = useState('');
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   const params = useMemo(() => {
     const sp = new URLSearchParams(location.search);
@@ -22,55 +26,99 @@ const RestaurantGrid = () => {
     return { search, cuisine, type, sort };
   }, [location.search]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setIsLoading(true);
-        setError('');
-        const query = {};
-        if (params.search) query.search = params.search;
-        if (params.cuisine) {
-          // backend expects single cuisine value; pass first if multiple
-          query.cuisine = params.cuisine.split(',')[0];
-        }
-        if (params.type) query.type = params.type;
-        if (params.sort) query.sort = params.sort;
-        const res = await restaurantService.getAllRestaurants(query);
-        const list = res.data || [];
-        const mapped = list.map(r => ({
-          id: r.id,
-          name: r.name,
-          cuisine: r.cuisineTypes || [],
-          rating: r.rating || 0,
-          reviewCount: r.reviewCount || 0,
-          deliveryTime: `${r.prepTime || 20}-${(r.prepTime || 20) + 10} min`,
-          pickupTime: `${Math.max(5, (r.prepTime || 20) - 10)}-${r.prepTime || 20} min`,
-          deliveryFee: r.deliveryFee ? `PKR ${Math.round(r.deliveryFee)}` : 'PKR 0',
-          priceRange: r.priceRange || '$$',
-          image: r.coverImage || r.logo || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop',
-          modes: [
-            r.delivery ? 'delivery' : null,
-            r.takeaway ? 'pickup' : null,
-            r.dineIn ? 'dinein' : null
-          ].filter(Boolean),
-          promoted: r.promoted || false,
-          isClosed: checkIsClosed(r)
-        })).sort((a, b) => {
-          if (a.isClosed && !b.isClosed) return 1;
-          if (!a.isClosed && b.isClosed) return -1;
-          return 0;
-        });
-        setRestaurants(mapped);
-      } catch (e) {
-        console.error(e);
+  // Observer for Infinite Scroll
+  const observer = useRef();
+  const lastRestaurantElementRef = useCallback(node => {
+    if (isLoading || isFetchingMore) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !showMapView) {
+        setPage(prevPage => prevPage + 1);
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [isLoading, isFetchingMore, hasMore, showMapView]);
+
+  const fetchIdRef = useRef(0);
+
+  const loadRestaurants = useCallback(async (currentPage, currentParams) => {
+    const fetchId = ++fetchIdRef.current;
+    
+    try {
+      if (currentPage === 1) setIsLoading(true);
+      else setIsFetchingMore(true);
+      
+      setError('');
+      const query = { page: currentPage, limit: 12 };
+      if (currentParams.search) query.search = currentParams.search;
+      if (currentParams.cuisine) {
+        query.cuisine = currentParams.cuisine.split(',')[0];
+      }
+      if (currentParams.type) query.type = currentParams.type;
+      if (currentParams.sort) query.sort = currentParams.sort;
+      
+      const res = await restaurantService.getAllRestaurants(query);
+      if (fetchId !== fetchIdRef.current) return; // Stale request
+
+      const list = res.data || [];
+      setHasMore(currentPage < (res.pages || 1));
+      
+      const mapped = list.map(r => ({
+        id: r.id,
+        name: r.name,
+        cuisine: r.cuisineTypes || [],
+        rating: r.rating || 0,
+        reviewCount: r.reviewCount || 0,
+        deliveryTime: `${r.prepTime || 20}-${(r.prepTime || 20) + 10} min`,
+        pickupTime: `${Math.max(5, (r.prepTime || 20) - 10)}-${r.prepTime || 20} min`,
+        deliveryFee: r.deliveryFee ? `PKR ${Math.round(r.deliveryFee)}` : 'PKR 0',
+        priceRange: r.priceRange || '$$',
+        image: r.coverImage || r.logo || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop',
+        modes: [
+          r.delivery ? 'delivery' : null,
+          r.takeaway ? 'pickup' : null,
+          r.dineIn ? 'dinein' : null
+        ].filter(Boolean),
+        promoted: r.promoted || false,
+        isClosed: checkIsClosed(r)
+      })).sort((a, b) => {
+        if (a.isClosed && !b.isClosed) return 1;
+        if (!a.isClosed && b.isClosed) return -1;
+        return 0;
+      });
+      
+      setRestaurants(prev => currentPage === 1 ? mapped : [...prev, ...mapped]);
+    } catch (e) {
+      console.error(e);
+      if (fetchId !== fetchIdRef.current) return;
+      if (currentPage === 1) {
         setError('Failed to load restaurants');
         setRestaurants([]);
-      } finally {
-        setIsLoading(false);
       }
-    };
-    load();
-  }, [params]);
+    } finally {
+      if (fetchId === fetchIdRef.current) {
+        setIsLoading(false);
+        setIsFetchingMore(false);
+      }
+    }
+  }, []);
+
+  // Use Effect for initial load on params change
+  useEffect(() => {
+    setRestaurants([]);
+    setPage(1);
+    setHasMore(true);
+    loadRestaurants(1, params);
+  }, [params, loadRestaurants]);
+
+  // Use Effect for pagination
+  useEffect(() => {
+    if (page > 1 && hasMore) {
+      loadRestaurants(page, params);
+    }
+  }, [page, hasMore, params, loadRestaurants]);
 
   const modeIcons = {
     delivery: { icon: Truck, label: 'Delivery' },
@@ -128,120 +176,135 @@ const RestaurantGrid = () => {
             </p>
           </div>
         ) : restaurants.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {!showMapView ? restaurants.map((restaurant) => (
-              <Link
-                to={`/customer/restaurant/${restaurant.id}`}
-                key={restaurant.id}
-                className="group bg-white border border-neutral-200 rounded-xl overflow-hidden hover:border-primary-300 hover:shadow-xl transition-all duration-300"
-              >
-                {/* Image Container */}
-                <div className="relative h-48 overflow-hidden">
-                  <img
-                    src={restaurant.image}
-                    alt={restaurant.name}
-                    className={`w-full h-full object-cover transition-transform duration-300 ${restaurant.isClosed ? 'grayscale opacity-70' : 'group-hover:scale-105'}`}
-                  />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {!showMapView ? restaurants.map((restaurant, index) => {
+                const isLast = index === restaurants.length - 1;
+                return (
+                <Link
+                  ref={isLast ? lastRestaurantElementRef : null}
+                  to={`/customer/restaurant/${restaurant.id}`}
+                  key={restaurant.id}
+                  className="group bg-white border border-neutral-200 rounded-xl overflow-hidden hover:border-primary-300 hover:shadow-xl transition-all duration-300"
+                >
+                  {/* Image Container */}
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={restaurant.image}
+                      alt={restaurant.name}
+                      loading="lazy"
+                      decoding="async"
+                      className={`w-full h-full object-cover transition-transform duration-300 ${restaurant.isClosed ? 'grayscale opacity-70' : 'group-hover:scale-105'}`}
+                    />
 
-                  {/* Overlay Gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    {/* Overlay Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 
-                  {/* Overlay Closed Badge */}
-                  {restaurant.isClosed && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                      <span className="px-4 py-1.5 border-2 border-red-500 text-red-500 font-black rounded-lg shadow-xl transform -rotate-12 uppercase tracking-wide bg-white/90">
-                        Currently Closed
+                    {/* Overlay Closed Badge */}
+                    {restaurant.isClosed && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+                        <span className="px-4 py-1.5 border-2 border-red-500 text-red-500 font-black rounded-lg shadow-xl transform -rotate-12 uppercase tracking-wide bg-white/90">
+                          Currently Closed
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Promoted Badge */}
+                    {restaurant.promoted && (
+                      <div className="absolute top-3 left-3">
+                        <span className="px-2.5 py-1 bg-gradient-to-r from-primary-600 to-accent-500 text-white text-xs font-semibold rounded-full">
+                          PROMOTED
+                        </span>
+                      </div>
+                    )}
+
+                    {/* View Menu Button (on hover) */}
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <span className="px-4 py-2 bg-white text-primary-600 font-semibold rounded-lg shadow-lg">
+                        View menu
                       </span>
                     </div>
-                  )}
-
-                  {/* Promoted Badge */}
-                  {restaurant.promoted && (
-                    <div className="absolute top-3 left-3">
-                      <span className="px-2.5 py-1 bg-gradient-to-r from-primary-600 to-accent-500 text-white text-xs font-semibold rounded-full">
-                        PROMOTED
-                      </span>
-                    </div>
-                  )}
-
-                  {/* View Menu Button (on hover) */}
-                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <span className="px-4 py-2 bg-white text-primary-600 font-semibold rounded-lg shadow-lg">
-                      View menu
-                    </span>
                   </div>
-                </div>
 
-                {/* Content */}
-                <div className="p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-bold text-lg text-neutral-900 truncate">
-                        {restaurant.name}
-                      </h3>
+                  {/* Content */}
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg text-neutral-900 truncate">
+                          {restaurant.name}
+                        </h3>
 
-                      {/* Cuisine Chips */}
-                      <div className="flex items-center gap-1 mt-2">
-                        {restaurant.cuisine.slice(0, 2).map((cuisine, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 bg-neutral-100 text-neutral-600 text-xs rounded"
-                          >
-                            {cuisine}
-                          </span>
-                        ))}
-                        {restaurant.cuisine.length > 2 && (
-                          <span className="text-xs text-neutral-400">
-                            +{restaurant.cuisine.length - 2}
-                          </span>
-                        )}
+                        {/* Cuisine Chips */}
+                        <div className="flex items-center gap-1 mt-2">
+                          {restaurant.cuisine.slice(0, 2).map((cuisine, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 bg-neutral-100 text-neutral-600 text-xs rounded"
+                            >
+                              {cuisine}
+                            </span>
+                          ))}
+                          {restaurant.cuisine.length > 2 && (
+                            <span className="text-xs text-neutral-400">
+                              +{restaurant.cuisine.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Rating */}
+                      <div className="flex items-center bg-green-50 px-2 py-1 rounded-lg">
+                        <Star className="w-4 h-4 text-green-600 fill-current" />
+                        <span className="ml-1 font-bold text-green-700">{restaurant.rating}</span>
+                        <span className="ml-1 text-xs text-neutral-500">({restaurant.reviewCount})</span>
                       </div>
                     </div>
 
-                    {/* Rating */}
-                    <div className="flex items-center bg-green-50 px-2 py-1 rounded-lg">
-                      <Star className="w-4 h-4 text-green-600 fill-current" />
-                      <span className="ml-1 font-bold text-green-700">{restaurant.rating}</span>
-                      <span className="ml-1 text-xs text-neutral-500">({restaurant.reviewCount})</span>
+                    {/* Mode Availability */}
+                    <div className="flex items-center gap-2 mb-4">
+                      {restaurant.modes.map((mode) => {
+                        const ModeIcon = modeIcons[mode].icon;
+                        return (
+                          <span
+                            key={mode}
+                            className="flex items-center gap-1 px-2 py-1 bg-neutral-50 text-neutral-600 text-xs rounded"
+                          >
+                            <ModeIcon className="w-3 h-3" />
+                            {modeIcons[mode].label}
+                          </span>
+                        );
+                      })}
                     </div>
-                  </div>
 
-                  {/* Mode Availability */}
-                  <div className="flex items-center gap-2 mb-4">
-                    {restaurant.modes.map((mode) => {
-                      const ModeIcon = modeIcons[mode].icon;
-                      return (
-                        <span
-                          key={mode}
-                          className="flex items-center gap-1 px-2 py-1 bg-neutral-50 text-neutral-600 text-xs rounded"
-                        >
-                          <ModeIcon className="w-3 h-3" />
-                          {modeIcons[mode].label}
+                    {/* Service Info */}
+                    <div className="flex items-center justify-between text-sm text-neutral-600">
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 mr-1" />
+                        <span className={restaurant.isClosed ? 'text-red-500 font-medium' : ''}>
+                          {restaurant.isClosed ? 'Closed' : restaurant.deliveryTime}
                         </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* Service Info */}
-                  <div className="flex items-center justify-between text-sm text-neutral-600">
-                    <div className="flex items-center">
-                      <Clock className="w-4 h-4 mr-1" />
-                      <span className={restaurant.isClosed ? 'text-red-500 font-medium' : ''}>
-                        {restaurant.isClosed ? 'Closed' : restaurant.deliveryTime}
-                      </span>
-                    </div>
-                    <div className="text-neutral-500">
-                      {restaurant.deliveryFee} delivery fee
+                      </div>
+                      <div className="text-neutral-500">
+                        {restaurant.deliveryFee} delivery fee
+                      </div>
                     </div>
                   </div>
+                </Link>
+                );
+              }) : (
+                <div className="col-span-full">
+                  <MapView restaurants={restaurants} />
                 </div>
-              </Link>
-            )) : (
-              <div className="col-span-full">
-                <MapView restaurants={restaurants} />
+              )}
+            </div>
+            
+            {/* Infinite Scroll Loading State */}
+            {isFetchingMore && (
+              <div className="flex justify-center mt-8">
+                 <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
-          </div>
+          </>
         ) : (
           // Empty State
           <div className="text-center py-16">

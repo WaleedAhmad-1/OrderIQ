@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { admin, isInitialized } = require('../config/firebase');
 
 /**
  * Helper to generate a personalized referral code (e.g., WALEED782)
@@ -57,6 +58,34 @@ exports.register = async (req, res) => {
             // If UID matches, we can safely treat this as a "success" (maybe they refreshed or clicked twice)
             if (existingUser.firebaseUid === firebaseUid) {
                 console.log('[AuthController] User already exists with matching UID, returning success.');
+                
+                // IMPORTANT: If middleware already created them as CUSTOMER but this is a RESTAURANT_OWNER, update role
+                if (role && existingUser.role !== role) {
+                    console.log(`[AuthController] Syncing role: ${existingUser.role} -> ${role}`);
+                    const updatedUser = await prisma.user.update({
+                        where: { id: existingUser.id },
+                        data: { role: role }
+                    });
+                    
+                    // Sync role to Firebase custom claims for permanent persistence
+                    if (isInitialized) {
+                        try { await admin.auth().setCustomUserClaims(firebaseUid, { role: role }); } 
+                        catch (e) { console.error('Error setting custom claim:', e); }
+                    }
+
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'User already registered & role updated',
+                        data: { id: updatedUser.id, email: updatedUser.email, fullName: updatedUser.fullName, role: updatedUser.role }
+                    });
+                }
+                
+                // Ensure Firebase has the custom claim
+                if (isInitialized && existingUser.role && existingUser.role !== 'CUSTOMER') {
+                    try { await admin.auth().setCustomUserClaims(firebaseUid, { role: existingUser.role }); } 
+                    catch (e) { console.error('Error setting custom claim:', e); }
+                }
+
                 return res.status(200).json({ 
                     success: true, 
                     message: 'User already registered',
@@ -95,6 +124,12 @@ exports.register = async (req, res) => {
                 rewardPoints: pointsToAward
             }
         });
+
+        // Sync role to Firebase custom claims for permanent persistence
+        if (isInitialized && (role || 'CUSTOMER') !== 'CUSTOMER') {
+            try { await admin.auth().setCustomUserClaims(firebaseUid, { role: role }); } 
+            catch (e) { console.error('Error setting custom claim:', e); }
+        }
 
         // Handle referral logic (Non-blocking reward phase)
         if (usedReferralCode && usedReferralCode.trim()) {

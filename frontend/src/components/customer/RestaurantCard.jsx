@@ -1,8 +1,20 @@
 import React from 'react';
-import { Star, Clock, Truck, Package, Utensils } from 'lucide-react';
+import { Star, Clock, Truck, Package, Utensils, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useFavorites } from '../../features/customer/FavoritesContext';
+import { useAuth } from '../../features/auth/AuthContext';
 
 const RestaurantCard = ({ restaurant, mode = 'delivery' }) => {
+  const { isAuthenticated } = useAuth();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const favorited = isAuthenticated && isFavorite(restaurant.id);
+
+  const handleFavoriteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(restaurant.id);
+  };
+
   const {
     name,
     rating,
@@ -57,6 +69,19 @@ const RestaurantCard = ({ restaurant, mode = 'delivery' }) => {
               PROMOTED
             </span>
           </div>
+        )}
+
+        {/* Favorite Heart Button */}
+        {isAuthenticated && (
+          <button
+            onClick={handleFavoriteClick}
+            className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-all duration-200 z-10"
+            aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart
+              className={`w-4 h-4 transition-colors duration-200 ${favorited ? 'text-red-500 fill-red-500' : 'text-gray-500'}`}
+            />
+          </button>
         )}
 
 

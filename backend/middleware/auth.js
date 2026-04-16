@@ -68,12 +68,12 @@ exports.protect = async (req, res, next) => {
                 }
             }
         }
-        // Self-heal: if Firebase custom claims indicate ADMIN but DB has a lesser role, upgrade
-        if (claimsRole === 'ADMIN' && user.role !== 'ADMIN') {
-            console.log(`[Auth] Role mismatch for ${user.email}: DB=${user.role}, Claims=${claimsRole}. Upgrading to ADMIN.`);
+        // Self-heal: keep DB role in sync with Firebase Custom claims if they differ
+        if (claimsRole && claimsRole !== user.role && claimsRole !== 'CUSTOMER') {
+            console.log(`[Auth] Role mismatch for ${user.email}: DB=${user.role}, Claims=${claimsRole}. Syncing DB role.`);
             user = await prisma.user.update({
                 where: { id: user.id },
-                data: { role: 'ADMIN' }
+                data: { role: claimsRole }
             });
         }
 

@@ -5,7 +5,6 @@ const { protect } = require('../middleware/auth');
 const router = express.Router();
 
 /**
- * We don't need a traditional /login route here.
  * The frontend uses Firebase SDK to login, gets an ID token, 
  * and sends that token in the Authorization header to our protected routes.
  * 

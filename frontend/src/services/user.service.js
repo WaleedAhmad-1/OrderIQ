@@ -48,7 +48,7 @@ export const userService = {
         return response.data;
     },
 
-    addFavorite: async (restaurantId) => {
+    toggleFavorite: async (restaurantId) => {
         const response = await api.post(`/users/favorites/${restaurantId}`);
         return response.data;
     },

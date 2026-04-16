@@ -8,6 +8,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup, onForgotPassword }) => 
     const navigate = useNavigate();
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -20,7 +21,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup, onForgotPassword }) => 
         setIsLoading(true);
         try {
             // Step 1: Firebase login
-            await loginUser(formData.email, formData.password);
+            await loginUser(formData.email, formData.password, rememberMe);
 
             // Step 2: Fetch DB profile to determine role
             const profileRes = await getCurrentUserProfile();
@@ -119,6 +120,18 @@ const LoginModal = ({ isOpen, onClose, onSwitchToSignup, onForgotPassword }) => 
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
+                                </div>
+                                <div className="flex items-center mt-4 mb-2">
+                                    <input
+                                        id="remember-me"
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+                                    />
+                                    <label htmlFor="remember-me" className="ml-2 text-sm font-medium text-gray-700">
+                                        Remember me
+                                    </label>
                                 </div>
                             </div>
 

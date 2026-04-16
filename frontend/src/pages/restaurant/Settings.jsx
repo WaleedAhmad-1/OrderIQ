@@ -4,9 +4,7 @@ import {
   MapPin,
   Phone,
   Mail,
-  Bell,
   CreditCard,
-  Puzzle,
   LifeBuoy,
   Upload,
   Save,
@@ -59,17 +57,9 @@ const Settings = () => {
     }
   }, [restaurant, profile]);
 
-  const [notifications, setNotifications] = useState({
-    newOrderSound: true,
-    browserNotifications: false,
-    emailSummaries: true,
-  });
-
   const tabs = [
     { id: 'profile', label: 'Restaurant Profile', icon: <Building size={16} /> },
-    { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
     { id: 'payments', label: 'Payment & Fees', icon: <CreditCard size={16} /> },
-    { id: 'integrations', label: 'Integrations', icon: <Puzzle size={16} /> },
     { id: 'support', label: 'Support', icon: <LifeBuoy size={16} /> },
   ];
 
@@ -345,58 +335,6 @@ const Settings = () => {
           </div>
         );
 
-      case 'notifications':
-        return (
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-                <div>
-                  <p className="font-medium">New Order Sound</p>
-                  <p className="text-sm text-neutral-600">Play sound when new order arrives</p>
-                </div>
-                <button
-                  onClick={() => setNotifications({ ...notifications, newOrderSound: !notifications.newOrderSound })}
-                  className={`w-12 h-6 rounded-full transition-colors ${notifications.newOrderSound ? 'bg-primary' : 'bg-neutral-300'
-                    }`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${notifications.newOrderSound ? 'translate-x-7' : 'translate-x-1'
-                    }`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-                <div>
-                  <p className="font-medium">Browser Notifications</p>
-                  <p className="text-sm text-neutral-600">Desktop notifications for new orders</p>
-                </div>
-                <button
-                  onClick={() => setNotifications({ ...notifications, browserNotifications: !notifications.browserNotifications })}
-                  className={`w-12 h-6 rounded-full transition-colors ${notifications.browserNotifications ? 'bg-primary' : 'bg-neutral-300'
-                    }`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${notifications.browserNotifications ? 'translate-x-7' : 'translate-x-1'
-                    }`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-                <div>
-                  <p className="font-medium">Email Summaries</p>
-                  <p className="text-sm text-neutral-600">Daily sales reports via email</p>
-                </div>
-                <button
-                  onClick={() => setNotifications({ ...notifications, emailSummaries: !notifications.emailSummaries })}
-                  className={`w-12 h-6 rounded-full transition-colors ${notifications.emailSummaries ? 'bg-primary' : 'bg-neutral-300'
-                    }`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transform transition-transform ${notifications.emailSummaries ? 'translate-x-7' : 'translate-x-1'
-                    }`} />
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-
       case 'payments':
         return (
           <div className="space-y-6">
@@ -404,17 +342,6 @@ const Settings = () => {
               <CreditCard size={48} className="mx-auto text-neutral-400 mb-4" />
               <h3 className="text-xl font-semibold text-neutral-800 mb-2">Payment Settings</h3>
               <p className="text-neutral-600">Configure payment processors and fees</p>
-            </div>
-          </div>
-        );
-
-      case 'integrations':
-        return (
-          <div className="space-y-6">
-            <div className="text-center py-12">
-              <Puzzle size={48} className="mx-auto text-neutral-400 mb-4" />
-              <h3 className="text-xl font-semibold text-neutral-800 mb-2">Integrations</h3>
-              <p className="text-neutral-600">Connect third-party services and tools</p>
             </div>
           </div>
         );

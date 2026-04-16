@@ -10,6 +10,7 @@ const AdminLogin = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -33,7 +34,7 @@ const AdminLogin = () => {
         setError('');
 
         try {
-            const result = await adminLogin(formData.email, formData.password);
+            const result = await adminLogin(formData.email, formData.password, rememberMe);
             if (result.success) {
                 // AuthContext will update isAdminAuthenticated; navigate on next render via useEffect
                 toast.success('Welcome back, Admin!');
@@ -132,6 +133,18 @@ const AdminLogin = () => {
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
+                            </div>
+                            <div className="flex items-center mt-4">
+                                <input
+                                    id="admin-remember-me"
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    className="w-4 h-4 text-primary-500 bg-neutral-900 border-neutral-600 rounded focus:ring-primary-500 focus:ring-2 focus:ring-offset-neutral-800"
+                                />
+                                <label htmlFor="admin-remember-me" className="ml-2 text-sm font-medium text-neutral-300">
+                                    Remember me
+                                </label>
                             </div>
                         </div>
 

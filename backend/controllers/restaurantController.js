@@ -6,14 +6,18 @@ const ragSync = require('../rag').sync;
 // @access  Public
 exports.getRestaurants = async (req, res) => {
     try {
-        const { search, cuisine, type, sort } = req.query;
+        const { search, cuisine, type, sort, page, limit } = req.query;
 
         const whereClause = {}; // Fetch all restaurants to show correct closed status
 
         console.log('[DEBUG] Query Params:', req.query);
 
         if (search) {
-            whereClause.name = { contains: search, mode: 'insensitive' };
+            const capitalizedSearch = search.charAt(0).toUpperCase() + search.slice(1).toLowerCase();
+            whereClause.OR = [
+                { name: { contains: search, mode: 'insensitive' } },
+                { cuisineTypes: { hasSome: [search, capitalizedSearch] } }
+            ];
         }
 
         if (cuisine) {
@@ -39,15 +43,31 @@ exports.getRestaurants = async (req, res) => {
             orderBy = { createdAt: 'desc' }; // fallback
         }
 
-        const restaurants = await prisma.restaurant.findMany({
-            where: whereClause,
-            orderBy: orderBy,
-            include: {
-                categories: { select: { id: true } }
-            }
-        });
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = parseInt(limit, 10) || 12;
+        const skip = (pageNum - 1) * limitNum;
 
-        res.status(200).json({ success: true, count: restaurants.length, data: restaurants });
+        const [total, restaurants] = await prisma.$transaction([
+            prisma.restaurant.count({ where: whereClause }),
+            prisma.restaurant.findMany({
+                where: whereClause,
+                orderBy: orderBy,
+                include: {
+                    categories: { select: { id: true } }
+                },
+                skip,
+                take: limitNum
+            })
+        ]);
+
+        res.status(200).json({ 
+            success: true, 
+            count: restaurants.length, 
+            total,
+            page: pageNum,
+            pages: Math.ceil(total / limitNum),
+            data: restaurants 
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server error retrieving restaurants' });

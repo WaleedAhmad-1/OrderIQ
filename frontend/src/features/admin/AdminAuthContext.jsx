@@ -11,9 +11,9 @@ export const AdminAuthProvider = ({ children }) => {
     // Admin is authenticated only if logged in AND has the ADMIN role
     const isAdminAuthenticated = isAuthenticated && isAdmin;
 
-    const adminLogin = async (email, password) => {
+    const adminLogin = async (email, password, rememberMe = false) => {
         try {
-            await loginUser(email, password);
+            await loginUser(email, password, rememberMe);
             // The AuthContext will automatically fetch the profile and update `isAdmin`
             return { success: true };
         } catch (error) {

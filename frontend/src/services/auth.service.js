@@ -4,7 +4,10 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
-    updateProfile
+    updateProfile,
+    setPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence
 } from 'firebase/auth';
 
 /**
@@ -52,8 +55,9 @@ export const registerUser = async (email, password, userData) => {
 /**
  * Login user via Firebase
  */
-export const loginUser = async (email, password) => {
+export const loginUser = async (email, password, rememberMe = false) => {
     try {
+        await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         // The backend `GET /auth/me` can be used to load full DB profile
         return userCredential.user;

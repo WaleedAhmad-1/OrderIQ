@@ -1,43 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Heart, Star, Clock, MapPin, Trash2, ChevronLeft } from 'lucide-react';
+import React from 'react';
+import { Heart, Star, Clock, ChevronLeft } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import DashboardSidebar from '../../components/layout/Customer/DashboardSidebar';
 import Card from '../../components/ui/Card';
-import { userService } from '../../services/user.service';
-import { useAuth } from '../../features/auth/AuthContext';
-import toast from 'react-hot-toast';
+import { useFavorites } from '../../features/customer/FavoritesContext';
 
 const Favorites = () => {
     const navigate = useNavigate();
-    const { profile } = useAuth();
-    const [favoriteRestaurants, setFavoriteRestaurants] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchFavorites = async () => {
-            try {
-                const res = await userService.getFavorites();
-                const favs = res.data?.data || res.data || [];
-                setFavoriteRestaurants(favs);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchFavorites();
-    }, []);
-
-    const handleToggleFavorite = async (restaurantId) => {
-        try {
-            await userService.addFavorite(restaurantId);
-            setFavoriteRestaurants(prev => prev.filter(f => f.id !== restaurantId && f.restaurantId !== restaurantId));
-            toast.success("Removed from favorites");
-        } catch (err) {
-            toast.error("Failed to update favorites");
-        }
-    };
-
+    const { favorites, loading, toggleFavorite } = useFavorites();
 
     return (
         <div className="bg-gray-50 min-h-screen pt-20 pb-12">
@@ -58,16 +28,20 @@ const Favorites = () => {
                         <Card className="p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-bold text-neutral-900">Favorite Restaurants</h2>
-                                <span className="text-sm text-neutral-500">{favoriteRestaurants.length} favorites</span>
+                                <span className="text-sm text-neutral-500">{favorites.length} favorites</span>
                             </div>
 
                             {loading ? (
                                 <div className="text-center py-8 text-neutral-500">Loading your favorites...</div>
-                            ) : favoriteRestaurants.length === 0 ? (
-                                <div className="text-center py-8 text-neutral-500">You haven't added any restaurants to your favorites yet.</div>
+                            ) : favorites.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Heart className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-neutral-900 mb-2">No favorites yet</h3>
+                                    <p className="text-neutral-500">Start adding your favorite restaurants!</p>
+                                </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {favoriteRestaurants.map((fav) => {
+                                    {favorites.map((fav) => {
                                         const restaurant = fav.restaurant || fav;
                                         return (
                                             <div
@@ -80,7 +54,10 @@ const Favorites = () => {
                                                         alt={restaurant.name}
                                                         className="w-full h-full object-cover"
                                                     />
-                                                    <button onClick={() => handleToggleFavorite(restaurant.id)} className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow hover:bg-red-50 transition">
+                                                    <button
+                                                        onClick={() => toggleFavorite(restaurant.id)}
+                                                        className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow hover:bg-red-50 transition"
+                                                    >
                                                         <Heart className="w-4 h-4 text-red-500 fill-red-500" />
                                                     </button>
                                                 </div>
@@ -106,14 +83,6 @@ const Favorites = () => {
                                             </div>
                                         );
                                     })}
-                                </div>
-                            )}
-
-                            {favoriteRestaurants.length === 0 && (
-                                <div className="text-center py-12">
-                                    <Heart className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
-                                    <h3 className="text-lg font-bold text-neutral-900 mb-2">No favorites yet</h3>
-                                    <p className="text-neutral-500">Start adding your favorite restaurants!</p>
                                 </div>
                             )}
                         </Card>

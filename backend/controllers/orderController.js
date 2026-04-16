@@ -1,8 +1,10 @@
 const prisma = require('../config/db');
 
-// Helper to generate order numbers
+// Helper to generate order numbers based on datetime to prevent overlaps
 const generateOrderNumber = () => {
-    return `#ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const dateStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
+    return `#ORD-${dateStr}-${randomSuffix}`;
 };
 
 // @desc    Create new order

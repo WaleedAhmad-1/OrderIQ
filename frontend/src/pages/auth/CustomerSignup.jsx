@@ -60,9 +60,17 @@ const CustomerSignup = () => {
     const getPasswordStrength = () => {
         const { password } = formData;
         if (!password) return { strength: 0, label: '', color: '' };
-        if (password.length < 6) return { strength: 33, label: 'Weak', color: 'bg-red-500' };
-        if (password.length < 10) return { strength: 66, label: 'Good', color: 'bg-yellow-500' };
-        return { strength: 100, label: 'Strong', color: 'bg-green-500' };
+        
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+        
+        if (hasLetter && hasNumber && hasSpecial) {
+            if (password.length >= 8) return { strength: 100, label: 'Strong', color: 'bg-green-500' };
+            return { strength: 66, label: 'Good', color: 'bg-yellow-500' };
+        }
+        
+        return { strength: 33, label: 'Weak', color: 'bg-red-500' };
     };
 
     const handleLogin = async (e) => {
@@ -75,7 +83,7 @@ const CustomerSignup = () => {
             await checkAuth();
 
             toast.success('Logged in successfully!');
-            navigate('/customer');
+            navigate('/customer/home');
         } catch (error) {
             console.error('Login error:', error);
             if (error.code === 'auth/user-not-found') {
@@ -128,7 +136,7 @@ const CustomerSignup = () => {
             await checkAuth();
 
             toast.success('Account created successfully!');
-            navigate('/customer');
+            navigate('/customer/home');
 
         } catch (error) {
             console.error('Registration error details:', error.response?.data || error.message);
@@ -272,7 +280,7 @@ const CustomerSignup = () => {
                         <button type="submit" disabled={isLoading} className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                             {isLoading ? <Loader className="w-5 h-5 animate-spin" /> : (
                                 <>
-                                    {isLoginMode ? 'Sign In' : 'Create Account'}
+                                    {isLoginMode ? 'Sign In' : 'Finish'}
                                     <ArrowRight className="w-5 h-5" />
                                 </>
                             )}

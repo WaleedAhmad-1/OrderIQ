@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Plus, Minus, Flame, Sparkles, Star } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useCart } from '../../features/customer/CartContext';
+import { useAuth } from '../../features/auth/AuthContext';
 
 const DishCard = ({ dish, restaurantName, restaurantId, isClosed }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const { cartItems, addToCart, removeFromCart, updateQuantity } = useCart();
+  const { isAuthenticated } = useAuth();
 
   // Find if item is in cart
   const cartItem = cartItems.find(item => item.id === dish.id);
@@ -26,6 +29,10 @@ const DishCard = ({ dish, restaurantName, restaurantId, isClosed }) => {
   };
 
   const handleAdd = () => {
+    if (!isAuthenticated) {
+      toast.error('Please log in first to add items to your cart.', { icon: '🔒' });
+      return;
+    }
     addToCart({ ...dish, restaurantId }, { id: restaurantId, name: restaurantName });
   };
 

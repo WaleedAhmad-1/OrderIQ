@@ -3,14 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
     ArrowLeft, Trash2, ChevronRight, ShoppingBag,
-    MapPin, UtensilsCrossed, Wallet, CheckCircle2
+    MapPin, UtensilsCrossed, Wallet, CheckCircle2, LogIn
 } from 'lucide-react';
 import { useCart } from '../../features/customer/CartContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import Button from '../../components/ui/Button';
 import GooglePayButton from '../../components/customer/GooglePayButton';
 import { paymentService } from '../../services/payment.service';
 import { orderService } from '../../services/order.service';
 import { userService } from '../../services/user.service';
+import LoginModal from '../../components/auth/LoginModal';
+import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 
 const CartPage = () => {
 
@@ -20,6 +23,7 @@ const CartPage = () => {
         orderType, setOrderType, tableLabel, setTableLabel
     } = useCart();
 
+    const { isAuthenticated } = useAuth();
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentError, setPaymentError] = useState('');
@@ -30,7 +34,24 @@ const CartPage = () => {
     const [selectedAddress, setSelectedAddress] = useState(null);
     const [instructions, setInstructions] = useState('');
 
+    // Modal state
+    const [isLoginOpen, setIsLoginOpen] = useState(false);
+    const [isForgotOpen, setIsForgotOpen] = useState(false);
+
+    const handleOpenLogin = () => {
+        setIsForgotOpen(false);
+        setIsLoginOpen(true);
+    };
+
+    const handleOpenForgot = () => {
+        setIsLoginOpen(false);
+        setIsForgotOpen(true);
+    };
+
+    // Only fetch addresses if user is authenticated
     React.useEffect(() => {
+        if (!isAuthenticated) return;
+
         const fetchAddresses = async () => {
             try {
                 const res = await userService.getAddresses();
@@ -44,7 +65,7 @@ const CartPage = () => {
             }
         };
         fetchAddresses();
-    }, []);
+    }, [isAuthenticated]);
 
     // Tax & Fees
     const deliveryFee = orderType === 'DELIVERY' ? 35 : 0;
@@ -175,6 +196,45 @@ const CartPage = () => {
             setIsProcessing(false);
         }
     };
+
+    // ─── Login required gate ───────────────────────────────────────────────────
+
+    if (!isAuthenticated) {
+        return (
+            <>
+                <LoginModal
+                    isOpen={isLoginOpen}
+                    onClose={() => setIsLoginOpen(false)}
+                    onForgotPassword={handleOpenForgot}
+                />
+                <ForgotPasswordModal
+                    isOpen={isForgotOpen}
+                    onClose={() => setIsForgotOpen(false)}
+                    onSwitchToLogin={handleOpenLogin}
+                />
+                <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-sm text-center max-w-md w-full">
+                        <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <LogIn className="w-10 h-10 text-purple-600" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Login Required</h2>
+                        <p className="text-neutral-500 mb-6">
+                            Please log in to your account first before placing an order. You can browse the menu, but adding items to cart and checkout require authentication.
+                        </p>
+                        <Button onClick={handleOpenLogin} className="w-full mb-3">
+                            Go to Login
+                        </Button>
+                        <button
+                            onClick={() => navigate('/')}
+                            className="w-full py-3 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+                        >
+                            Browse Restaurants Instead
+                        </button>
+                    </div>
+                </div>
+            </>
+        );
+    }
 
     // ─── Empty cart state ──────────────────────────────────────────────────────
 

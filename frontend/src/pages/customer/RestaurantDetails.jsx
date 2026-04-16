@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, Clock, Info, Search, ChevronLeft, Minus, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Star, Clock, Info, Search, ChevronLeft, Minus, Plus, Heart } from 'lucide-react';
 import cartBG from "../../assets/cartBG.png";
 import DishCard from '../../components/customer/DishCard';
 import { restaurantService } from '../../services/restaurant.service';
 import { menuService } from '../../services/menu.service';
 import { useCart } from '../../features/customer/CartContext';
+import { useFavorites } from '../../features/customer/FavoritesContext';
+import { useAuth } from '../../features/auth/AuthContext';
 import { checkIsClosed } from '../../utils/restaurantUtils';
 
 
@@ -17,6 +20,9 @@ const RestaurantDetails = () => {
     const [menu, setMenu] = useState({ categories: [], items: [] });
     const [loading, setLoading] = useState(true);
     const { cartItems, cartTotal, updateQuantity, removeFromCart } = useCart();
+    const { isFavorite, toggleFavorite } = useFavorites();
+    const { isAuthenticated } = useAuth();
+    const favorited = isAuthenticated && isFavorite(id);
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -29,8 +35,8 @@ const RestaurantDetails = () => {
 
                 const rData = restRes.data;
                 // Add default banner if none
-                if (!rData.imageUrl) {
-                    rData.imageUrl = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=400&fit=crop';
+                if (!rData.coverImage) {
+                    rData.coverImage = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=400&fit=crop';
                 }
 
                 rData.isClosed = checkIsClosed(rData);
@@ -77,7 +83,7 @@ const RestaurantDetails = () => {
             {/* Banner Image */}
             <div className="relative h-64 md:h-80 w-full">
                 <img
-                    src={restaurant.imageUrl}
+                    src={restaurant.coverImage}
                     alt={restaurant.name}
                     className="w-full h-full object-cover"
                 />
@@ -89,6 +95,19 @@ const RestaurantDetails = () => {
                         <ChevronLeft className="w-6 h-6 text-neutral-900" />
                     </button>
                 </div>
+                {isAuthenticated && (
+                    <div className="absolute top-4 right-4 z-10">
+                        <button
+                            onClick={() => toggleFavorite(id)}
+                            className="bg-white/90 p-2.5 rounded-full shadow-lg hover:bg-white hover:scale-110 transition-all duration-200"
+                            aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                            <Heart
+                                className={`w-6 h-6 transition-all duration-200 ${favorited ? 'text-red-500 fill-red-500 scale-110' : 'text-neutral-600'}`}
+                            />
+                        </button>
+                    </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-6 left-6 text-white">
                     <h1 className="text-3xl md:text-5xl font-bold mb-2">{restaurant.name}</h1>
@@ -213,12 +232,22 @@ const RestaurantDetails = () => {
                                         <div className="w-full mt-6 py-3 bg-red-100 text-red-600 border border-red-200 text-center rounded-xl font-bold">
                                             Store Closed
                                         </div>
-                                    ) : (
+                                    ) : isAuthenticated ? (
                                       <button
                                           onClick={() => navigate('/customer/checkout')}
                                           className="w-full mt-6 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition"
                                       >
                                           Checkout
+                                      </button>
+                                    ) : (
+                                      <button
+                                          onClick={() => {
+                                              toast('Please log in first to place an order.', { icon: '🔒' });
+                                              navigate('/');
+                                          }}
+                                          className="w-full mt-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-lg transition"
+                                      >
+                                          Login to Order
                                       </button>
                                     )}
                                 </>
