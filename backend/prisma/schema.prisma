@@ -138,13 +138,14 @@ model Restaurant {
   delivery       Boolean   @default(true)
 
   // Relations
-  categories     Category[]
-  menuItems      MenuItem[]
-  orders         Order[]
-  teamMembers    TeamMember[]
-  favoritedBy    Favorite[]
-  tables         Table[]
-  
+  categories      Category[]
+  menuItems       MenuItem[]
+  orders          Order[]
+  teamMembers     TeamMember[]
+  favoritedBy     Favorite[]
+  tables          Table[]
+  paymentSettings RestaurantPaymentSettings?
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -316,4 +317,34 @@ model Table {
   updatedAt      DateTime   @updatedAt
 
   @@unique([restaurantId, label])
+}
+
+// ----------------------------------------------------------------------------
+// Per-Restaurant Payment Settings
+// ----------------------------------------------------------------------------
+
+model RestaurantPaymentSettings {
+  id                String     @id @default(uuid())
+  restaurantId      String     @unique
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  // Which payment methods this restaurant accepts
+  cashEnabled       Boolean    @default(true)
+  googlePayEnabled  Boolean    @default(true)
+  cardEnabled       Boolean    @default(false)
+
+  // Optional branding / UX note shown to customer
+  merchantName      String?
+  merchantNote      String?
+
+  // ── Google Pay account details ──────────────────────────────────────────
+  // The merchant ID used in the Google Pay API request
+  googlePayMerchantId   String?
+
+  // ── Production Card Gateway (Safepay / Stripe equivalent) ────────────────
+  gatewayPublicKey      String?
+  gatewaySecretKey      String?
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }

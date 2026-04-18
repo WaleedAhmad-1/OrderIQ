@@ -6,6 +6,7 @@ const {
     updateRestaurant,
     getMyRestaurants
 } = require('../controllers/restaurantController');
+const { getPaymentSettings, updatePaymentSettings } = require('../controllers/paymentSettingsController');
 const { protect, authorize } = require('../middleware/auth');
 
 // We also need to map nested menu, team & table routing 
@@ -32,5 +33,13 @@ router
     .route('/:id')
     .get(getRestaurantById)
     .put(protect, authorize('RESTAURANT_OWNER', 'ADMIN'), updateRestaurant);
+
+// Per-restaurant payment settings
+// GET  /api/restaurants/:id/payment-settings  — public (checkout page)
+// PUT  /api/restaurants/:id/payment-settings  — owner / admin only
+router
+    .route('/:id/payment-settings')
+    .get(getPaymentSettings)
+    .put(protect, authorize('RESTAURANT_OWNER', 'ADMIN'), updatePaymentSettings);
 
 module.exports = router;

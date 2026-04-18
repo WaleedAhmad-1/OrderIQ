@@ -58,14 +58,31 @@ exports.processGooglePay = async (req, res) => {
             deliveryAddress, customerNotes
         } = orderPayload;
 
-        // --- Validate restaurant exists ---
+        // --- Validate restaurant exists and has digital payments configured ---
         const restaurant = await prisma.restaurant.findUnique({
-            where: { id: restaurantId }
+            where: { id: restaurantId },
+            include: { paymentSettings: true }
         });
         if (!restaurant) {
             return res.status(404).json({
                 success: false,
                 message: 'Restaurant not found.'
+            });
+        }
+
+        const paySettings = restaurant.paymentSettings;
+        if (!paySettings || !paySettings.googlePayEnabled) {
+            return res.status(400).json({
+                success: false,
+                message: 'Digital payments (Google Pay) are not enabled for this restaurant.'
+            });
+        }
+
+        const isGpayConfigured = paySettings.googlePayMerchantId && paySettings.googlePayMerchantId.trim() !== "";
+        if (!isGpayConfigured) {
+            return res.status(400).json({
+                success: false,
+                message: 'Restaurant has not fully configured their digital wallet accounts.'
             });
         }
 
@@ -180,5 +197,83 @@ exports.getPaymentStatus = async (req, res) => {
     } catch (error) {
         console.error('[PaymentController] getPaymentStatus error:', error);
         return res.status(500).json({ success: false, message: 'Server error.' });
+    }
+};
+
+/**
+ * @desc    Process a standalone Credit/Debit Card checkout
+ * @route   POST /api/payments/card/process
+ * @access  Private (CUSTOMER)
+ */
+exports.processCardCheckout = async (req, res) => {
+    try {
+        const { paymentToken, orderPayload } = req.body;
+
+        if (!paymentToken) return res.status(400).json({ success: false, message: 'Payment token missing.' });
+        if (!orderPayload || !orderPayload.restaurantId) return res.status(400).json({ success: false, message: 'Invalid order payload.' });
+
+        // --- Validate restaurant & gateway config ---
+        const restaurant = await prisma.restaurant.findUnique({
+            where: { id: orderPayload.restaurantId },
+            include: { paymentSettings: true }
+        });
+        if (!restaurant) return res.status(404).json({ success: false, message: 'Restaurant not found.' });
+
+        const paySettings = restaurant.paymentSettings;
+        if (!paySettings || !paySettings.cardEnabled) {
+            return res.status(400).json({ success: false, message: 'Card payments are not enabled for this restaurant.' });
+        }
+
+        if (!paySettings.gatewayPublicKey || paySettings.gatewayPublicKey.trim() === "" || !paySettings.gatewaySecretKey || paySettings.gatewaySecretKey.trim() === "") {
+            return res.status(400).json({ success: false, message: 'Restaurant gateway not fully configured.' });
+        }
+
+        // --- Create Order ---
+        const orderItemsData = orderPayload.items.map(item => ({
+            menuItemId: item.menuItemId,
+            name: item.name,
+            quantity: item.quantity,
+            price: parseFloat(item.price),
+            modifiers: item.modifiers || null
+        }));
+
+        const order = await prisma.order.create({
+            data: {
+                orderNumber: generateOrderNumber(),
+                restaurantId: orderPayload.restaurantId,
+                customerId: req.user.id,
+                type: orderPayload.type,
+                table: orderPayload.type === 'DINEIN' ? orderPayload.table : null,
+                subtotal: parseFloat(orderPayload.subtotal),
+                deliveryFee: parseFloat(orderPayload.deliveryFee) || 0,
+                taxes: parseFloat(orderPayload.taxes) || 0,
+                platformFee: parseFloat(orderPayload.platformFee) || 0,
+                total: parseFloat(orderPayload.total),
+                deliveryAddress: orderPayload.deliveryAddress ? JSON.stringify(orderPayload.deliveryAddress) : null,
+                customerNotes: orderPayload.customerNotes || null,
+                paymentMethod: 'CARD', // Maps to the CARD gateway
+                paymentStatus: 'COMPLETED',
+                items: { create: orderItemsData }
+            },
+            include: {
+                items: true,
+                restaurant: { select: { name: true, logo: true } },
+                customer: { select: { fullName: true, phone: true } }
+            }
+        });
+
+        // --- Socket Emit ---
+        const io = req.app.get('io');
+        if (io) io.to(`restaurant_${orderPayload.restaurantId}`).emit('newOrder', order);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Card payment processed successfully (TEST).',
+            data: order
+        });
+
+    } catch (error) {
+        console.error('[PaymentController] processCardCheckout error:', error);
+        return res.status(500).json({ success: false, message: 'Server error processing card payment.' });
     }
 };

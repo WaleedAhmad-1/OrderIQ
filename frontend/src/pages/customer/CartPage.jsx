@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
     ArrowLeft, Trash2, ChevronRight, ShoppingBag,
-    MapPin, UtensilsCrossed, Wallet, CheckCircle2, LogIn
+    MapPin, UtensilsCrossed, Wallet, CheckCircle2, LogIn, CreditCard
 } from 'lucide-react';
 import { useCart } from '../../features/customer/CartContext';
 import { useAuth } from '../../features/auth/AuthContext';
 import Button from '../../components/ui/Button';
 import GooglePayButton from '../../components/customer/GooglePayButton';
+import MockGatewayModal from '../../components/customer/MockGatewayModal';
 import { paymentService } from '../../services/payment.service';
 import { orderService } from '../../services/order.service';
 import { userService } from '../../services/user.service';
@@ -27,7 +28,57 @@ const CartPage = () => {
     const navigate = useNavigate();
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentError, setPaymentError] = useState('');
-    const [selectedMethod, setSelectedMethod] = useState('gpay'); // 'gpay' | 'cash'
+
+    // Derive available payment methods and account details from this restaurant's settings.
+    // Instead of relying on the cached localStorage restaurant object, we will fetch the live settings.
+    const [livePaySettings, setLivePaySettings] = useState(restaurant?.paymentSettings || null);
+    const [isFetchingPay, setIsFetchingPay] = useState(false);
+
+    useEffect(() => {
+        if (restaurant?.id) {
+            setIsFetchingPay(true);
+            paymentService.getRestaurantPaymentSettings(restaurant.id)
+                .then(res => {
+                    if (res?.data) {
+                        setLivePaySettings(res.data);
+                    }
+                })
+                .catch(err => console.error("Failed to load live payment settings", err))
+                .finally(() => setIsFetchingPay(false));
+        }
+    }, [restaurant?.id]);
+
+    const cashEnabled   = livePaySettings ? livePaySettings.cashEnabled      : true;
+    const gpayEnabled   = livePaySettings ? livePaySettings.googlePayEnabled : true;
+    const cardEnabled   = livePaySettings?.cardEnabled || false;
+    const merchantNote    = livePaySettings?.merchantNote || null;
+
+    // Payout account details
+    const googlePayMerchantId = livePaySettings?.googlePayMerchantId || null;
+    const gatewayPublicKey = livePaySettings?.gatewayPublicKey || null;
+
+    // Determine if digital wallets are actually configured to receive money
+    const gpayConfigured = !!(googlePayMerchantId && googlePayMerchantId.trim() !== "");
+    const cardConfigured = !!(gatewayPublicKey && gatewayPublicKey.trim() !== "" && livePaySettings?.gatewaySecretKey && livePaySettings.gatewaySecretKey.trim() !== "");
+    
+    // Only available if both enabled AND configured
+    const gpayAvailable = gpayEnabled && gpayConfigured;
+    const cardAvailable = cardEnabled && cardConfigured;
+    const cashAvailable = cashEnabled; // Cash doesn't strictly need a bank account
+
+    // Default to card if available, else gpay, else cash
+    const defaultMethod = cardAvailable ? 'card' : gpayAvailable ? 'gpay' : cashAvailable ? 'cash' : 'none';
+    const [selectedMethod, setSelectedMethod] = useState(defaultMethod);
+
+    // Sync selected method if availability changes after fetch
+    useEffect(() => {
+        if (!isFetchingPay) {
+            if (cardAvailable && selectedMethod === 'none') setSelectedMethod('card');
+            else if (!cardAvailable && gpayAvailable && selectedMethod === 'card') setSelectedMethod('gpay');
+            else if (!gpayAvailable && cashAvailable && selectedMethod === 'gpay') setSelectedMethod('cash');
+        }
+    }, [cardAvailable, gpayAvailable, cashAvailable, isFetchingPay]);
+
 
     // API Data
     const [addresses, setAddresses] = useState([]);
@@ -37,6 +88,7 @@ const CartPage = () => {
     // Modal state
     const [isLoginOpen, setIsLoginOpen] = useState(false);
     const [isForgotOpen, setIsForgotOpen] = useState(false);
+    const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
     const handleOpenLogin = () => {
         setIsForgotOpen(false);
@@ -192,6 +244,36 @@ const CartPage = () => {
             console.error('Cash checkout failed:', error);
             toast.error(error.response?.data?.message || 'Failed to place order.');
             setPaymentError('Checkout failed. Please try again.');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // ─── Card checkout handlers ───────────────────────────────────────────────
+
+    const handleCardCheckout = () => {
+        if (!validateOrder()) return;
+        setIsCardModalOpen(true);
+    };
+
+    const handleCardSuccess = async (paymentToken) => {
+        setIsCardModalOpen(false);
+        setIsProcessing(true);
+        try {
+            const orderPayload = buildOrderPayload();
+            const response = await paymentService.processCardPayment({
+                paymentToken,
+                orderPayload
+            });
+
+            toast.success('🎉 Card Payment Successful! Order placed.');
+            clearCart();
+            const newOrderId = response.data?.id;
+            navigate(`/customer/orders/${newOrderId}`);
+        } catch (error) {
+            console.error('Card checkout failed:', error);
+            toast.error(error.response?.data?.message || 'Card payment failed. Please try again.');
+            setPaymentError('Card payment failed. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -458,58 +540,112 @@ const CartPage = () => {
                     {/* Payment Method Selection */}
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-neutral-100">
                         <h3 className="font-bold text-neutral-900 mb-3">Payment Method</h3>
+
+                        {/* Merchant payment note */}
+                        {merchantNote && (
+                            <div className="mb-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                                <span>📋</span>
+                                <span>{merchantNote}</span>
+                            </div>
+                        )}
+
+                        {/* No payment methods configured edge case */}
+                        {!cashAvailable && !gpayAvailable && (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-3">
+                                {!cashEnabled && !gpayEnabled 
+                                    ? "This restaurant has not enabled any payment methods yet. Please contact the restaurant."
+                                    : "This restaurant has enabled digital payments but hasn't configured an account to receive them. Please select cash or contact the restaurant."
+                                }
+                            </div>
+                        )}
+
+                        {/* If GPay is enabled but not configured, show a warning if they don't have other options or if we just want to let them know */}
+                        {gpayEnabled && !gpayConfigured && selectedMethod === 'none' && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm mb-3">
+                                Digital payments are currently unavailable as the restaurant has not set up their receiving account.
+                            </div>
+                        )}
+
                         <div className="space-y-3">
+                            {/* Google Pay Option — only if restaurant enabled it AND configured it */}
+                            {gpayAvailable && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedMethod('gpay')}
+                                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'gpay'
+                                        ? 'border-primary-500 bg-primary-50'
+                                        : 'border-neutral-200 hover:border-primary-300 bg-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+                                                <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#fff" />
+                                            </svg>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-semibold text-sm text-neutral-900">Google Pay</p>
+                                            <p className="text-xs text-neutral-500">Fast &amp; Secure digital payment</p>
+                                        </div>
+                                    </div>
+                                    {selectedMethod === 'gpay'
+                                        ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
+                                        : <ChevronRight className="w-5 h-5 text-neutral-400" />
+                                    }
+                                </button>
+                            )}
 
-                            {/* Google Pay Option */}
-                            <button
-                                type="button"
-                                onClick={() => setSelectedMethod('gpay')}
-                                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'gpay'
-                                    ? 'border-primary-500 bg-primary-50'
-                                    : 'border-neutral-200 hover:border-primary-300 bg-white'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    {/* G Pay icon */}
-                                    <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
-                                            <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#fff" />
-                                        </svg>
+                            {/* Cash on Delivery Option — only if restaurant enabled it */}
+                            {cashAvailable && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedMethod('cash')}
+                                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'cash'
+                                        ? 'border-primary-500 bg-primary-50'
+                                        : 'border-neutral-200 hover:border-primary-300 bg-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <Wallet className="w-5 h-5 text-green-600" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-semibold text-sm text-neutral-900">Cash on Delivery</p>
+                                            <p className="text-xs text-neutral-500">Pay when you receive your order</p>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <p className="font-semibold text-sm text-neutral-900">Google Pay</p>
-                                        <p className="text-xs text-neutral-500">Fast & Secure digital payment</p>
-                                    </div>
-                                </div>
-                                {selectedMethod === 'gpay'
-                                    ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
-                                    : <ChevronRight className="w-5 h-5 text-neutral-400" />
-                                }
-                            </button>
+                                    {selectedMethod === 'cash'
+                                        ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
+                                        : <ChevronRight className="w-5 h-5 text-neutral-400" />
+                                    }
+                                </button>
+                            )}
 
-                            {/* Cash on Delivery Option */}
-                            <button
-                                type="button"
-                                onClick={() => setSelectedMethod('cash')}
-                                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'cash'
-                                    ? 'border-primary-500 bg-primary-50'
-                                    : 'border-neutral-200 hover:border-primary-300 bg-white'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <Wallet className="w-5 h-5 text-green-600" />
+                            {/* Credit / Debit Card Option — only if restaurant enabled it AND configured it */}
+                            {cardAvailable && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedMethod('card')}
+                                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedMethod === 'card'
+                                        ? 'border-primary-500 bg-primary-50'
+                                        : 'border-neutral-200 hover:border-primary-300 bg-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <CreditCard className="w-5 h-5 text-blue-600" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-semibold text-sm text-neutral-900">Credit / Debit Card</p>
+                                            <p className="text-xs text-neutral-500">Pay via secure gateway</p>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <p className="font-semibold text-sm text-neutral-900">Cash on Delivery</p>
-                                        <p className="text-xs text-neutral-500">Pay when you receive your order</p>
-                                    </div>
-                                </div>
-                                {selectedMethod === 'cash'
-                                    ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
-                                    : <ChevronRight className="w-5 h-5 text-neutral-400" />
-                                }
-                            </button>
+                                    {selectedMethod === 'card'
+                                        ? <CheckCircle2 className="w-5 h-5 text-primary-600" />
+                                        : <ChevronRight className="w-5 h-5 text-neutral-400" />
+                                    }
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -521,26 +657,83 @@ const CartPage = () => {
                     )}
 
                     {/* ── Payment Action ── */}
-                    {selectedMethod === 'gpay' ? (
-                        <GooglePayButton
-                            amount={grandTotal}
-                            currency="PKR"
-                            label={`Order from ${restaurant?.name || 'Restaurant'}`}
-                            onSuccess={handleGooglePaySuccess}
-                            onError={handleGooglePayError}
-                            disabled={isProcessing}
-                        />
-                    ) : (
-                        <Button
-                            onClick={handleCashCheckout}
-                            className="w-full py-4 text-lg shadow-xl shadow-primary-500/20"
-                            isLoading={isProcessing}
-                        >
-                            Place Order • PKR {grandTotal}
-                        </Button>
-                    )}
+                    {selectedMethod === 'gpay' && gpayAvailable ? (
+                        <div className="space-y-3">
+                            {/* Simplified Google Pay Option Panel */}
+                            <div className="p-4 bg-violet-50 border border-violet-100 rounded-xl space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+                                            <path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z" fill="#fff" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-neutral-900 text-sm">Pay via Google Pay</p>
+                                        <p className="text-xs text-neutral-500">Secure, one-tap payment</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {gpayConfigured ? (
+                                <GooglePayButton
+                                    amount={grandTotal}
+                                    currency="PKR"
+                                    label={`Order from ${restaurant?.name || 'Restaurant'}`}
+                                    onSuccess={handleGooglePaySuccess}
+                                    onError={handleGooglePayError}
+                                    disabled={isProcessing}
+                                />
+                            ) : (
+                                <div className="w-full text-center text-red-500 py-3 font-medium bg-red-50 rounded-lg border border-red-100">
+                                    Google Pay not fully configured by restaurant.
+                                </div>
+                            )}
+                        </div>
+                    ) : selectedMethod === 'cash' && cashAvailable ? (
+                        <div className="space-y-3">
+                            <Button
+                                onClick={handleCashCheckout}
+                                className="w-full py-4 text-lg shadow-xl shadow-primary-500/20"
+                                isLoading={isProcessing}
+                            >
+                                Place Order • PKR {grandTotal}
+                            </Button>
+                        </div>
+                    ) : selectedMethod === 'card' && cardAvailable ? (
+                        <div className="space-y-3">
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">💳 Secure Card Payment</p>
+                                <p className="text-sm text-neutral-600">You will be redirected to our secure mock gateway to complete your payment.</p>
+                            </div>
+                            <Button
+                                onClick={handleCardCheckout}
+                                className="w-full py-4 text-lg shadow-xl shadow-primary-500/20"
+                                isLoading={isProcessing}
+                            >
+                                Pay with Card • PKR {grandTotal}
+                            </Button>
+                        </div>
+                    ) : null}
                 </div>
             </div>
+
+            <LoginModal
+                isOpen={isLoginOpen}
+                onClose={() => setIsLoginOpen(false)}
+                onForgotPassword={handleOpenForgot}
+            />
+            <ForgotPasswordModal
+                isOpen={isForgotOpen}
+                onClose={() => setIsForgotOpen(false)}
+                onSwitchToLogin={handleOpenLogin}
+            />
+            <MockGatewayModal
+                isOpen={isCardModalOpen}
+                onClose={() => setIsCardModalOpen(false)}
+                amount={grandTotal}
+                restaurantName={restaurant?.name}
+                onSuccess={handleCardSuccess}
+            />
         </div>
     );
 };

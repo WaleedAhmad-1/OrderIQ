@@ -18,10 +18,21 @@ exports.createOrder = async (req, res) => {
             deliveryAddress, customerNotes, paymentMethod
         } = req.body;
 
-        // Validate restaurant
-        const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
+        // Validate restaurant and check payment settings
+        const restaurant = await prisma.restaurant.findUnique({ 
+            where: { id: restaurantId },
+            include: { paymentSettings: true }
+        });
         if (!restaurant) {
             return res.status(404).json({ success: false, message: 'Restaurant not found' });
+        }
+
+        // Validate Cash payment method
+        const requestedMethod = paymentMethod || 'CASH';
+        if (requestedMethod === 'CASH') {
+            if (restaurant.paymentSettings && restaurant.paymentSettings.cashEnabled === false) {
+                return res.status(400).json({ success: false, message: 'Cash on Delivery is not accepted by this restaurant.' });
+            }
         }
 
         // Map items to format expected by Prisma nested write

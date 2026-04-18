@@ -90,7 +90,8 @@ exports.getRestaurantById = async (req, res) => {
                             where: { inStock: true }
                         }
                     }
-                }
+                },
+                paymentSettings: true   // Expose to checkout page
             }
         });
 

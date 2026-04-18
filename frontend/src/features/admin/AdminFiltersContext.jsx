@@ -50,7 +50,7 @@ export const isDateInRange = (dateValue, rangeId) => {
 
 export const AdminFiltersProvider = ({ children }) => {
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateRange, setDateRange] = useState('last_7_days');
+    const [dateRange, setDateRange] = useState('all_time');
 
     const value = useMemo(() => ({
         searchQuery,
